@@ -12,6 +12,13 @@ export const getViewer = cache(async () => {
   return { user, profile: profile as Profile | null, supabase };
 });
 
+const claimPendingInvitations = cache(async () => {
+  const viewer = await getViewer();
+  if (!viewer) return;
+  const { error } = await viewer.supabase.rpc("claim_pending_invitations");
+  if (error) throw new Error("Không thể tải lời mời lớp học.");
+});
+
 export async function requireProfile(role?: WorkspaceRole) {
   const viewer = await getViewer();
   if (!viewer) redirect("/");
@@ -20,5 +27,6 @@ export async function requireProfile(role?: WorkspaceRole) {
   const workspaceRole = resolveWorkspaceRole(profile);
   if (!workspaceRole) redirect("/onboarding");
   if (role && workspaceRole !== role) redirect(workspaceRole === "teacher" ? "/teacher" : "/student");
+  if (role === "student") await claimPendingInvitations();
   return { ...viewer, profile, workspaceRole };
 }

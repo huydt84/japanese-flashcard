@@ -23,6 +23,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:local": "node --env-file=.env scripts/test-local-e2e.mjs",
     "env:check": "node --env-file=.env scripts/check-deploy-env.mjs",
     "vercel:env": "node --env-file=.env scripts/sync-vercel-env.mjs",
     "deploy:prod": "pnpm run env:check && pnpm run db:migrate && pnpm run vercel:env && pnpm exec vercel --prod --yes"

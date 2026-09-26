@@ -94,6 +94,8 @@ pnpm build
 
 Nếu máy chưa có browser của Playwright: `pnpm exec playwright install chromium webkit`.
 
+Để chạy toàn bộ luồng trình duyệt với giáo viên và học sinh thật trên Supabase local, khởi động stack bằng `pnpm run db:up:local`, rồi chạy `pnpm run test:e2e:local`. Lệnh này tạo tài khoản kiểm thử riêng cho từng kịch bản, khởi động app tại cổng 3110 và xóa tài khoản sau khi hoàn thành. Có thể thêm đường dẫn hoặc bộ lọc Playwright sau `--`, ví dụ `pnpm run test:e2e:local -- tests/e2e/teacher-student-flow.spec.ts`.
+
 ## Deploy Vercel
 
 Sau khi cấu hình Supabase và Google OAuth, chạy một lệnh:

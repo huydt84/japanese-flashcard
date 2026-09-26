@@ -5,7 +5,9 @@ for (const name of required) {
   if (!process.env[name]) throw new Error(`${name} is missing from .env.`);
 }
 
-const child = spawn("pnpm", ["exec", "next", "dev"], {
+const nextArgs = process.argv.slice(2);
+if (nextArgs[0] === "--") nextArgs.shift();
+const child = spawn("pnpm", ["exec", "next", "dev", ...nextArgs], {
   env: {
     ...process.env,
     NEXT_PUBLIC_SITE_URL: process.env.LOCAL_SITE_URL,

@@ -28,7 +28,9 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    ".next-playwright-local/types/**/*.ts",
+    ".next-playwright-local/dev/types/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }
