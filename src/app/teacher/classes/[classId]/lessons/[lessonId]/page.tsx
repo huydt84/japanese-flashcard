@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowUp, CheckCircle, FileCsv, PencilSimple, Plus, Trash } from "@phosphor-icons/react/dist/ssr";
-import { addCard, deleteCard, importCards, moveCard, publishLesson, updateCard } from "@/app/actions";
+import { ArrowDown, ArrowLeft, ArrowUp, CheckCircle, FileXls, PencilSimple, Plus, Trash } from "@phosphor-icons/react/dist/ssr";
+import { addCard, deleteCard, importCards, moveCard, publishLesson, updateCard, updateLessonTitle } from "@/app/actions";
 import { ActionForm } from "@/components/action-form";
-import { CsvImporter } from "@/components/csv-importer";
+import { XlsxImporter } from "@/components/xlsx-importer";
+import { LessonTitleEditor } from "@/components/lesson-title-editor";
 import { requireProfile } from "@/lib/auth";
 
 const fields = [
@@ -29,10 +30,10 @@ export default async function LessonEditor({ params }: PageProps<"/teacher/class
       <header className="mt-5 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="break-words text-4xl font-bold tracking-[-.035em] sm:text-5xl">{lesson.title}</h1>
+            <LessonTitleEditor title={lesson.title} action={updateLessonTitle.bind(null, lessonId, classId)} />
             <span className={`rounded-full px-3 py-1 text-xs font-bold ${lesson.status === "published" ? "bg-correct/10 text-correct" : "bg-line/60 text-muted"}`}>{lesson.status === "published" ? "Đã xuất bản" : "Bản nháp"}</span>
           </div>
-          <p className="mt-3 max-w-3xl break-words text-lg text-muted">{lesson.description || "Thêm thẻ bằng form hoặc CSV."}</p>
+          <p className="mt-3 max-w-3xl break-words text-lg text-muted">{lesson.description || "Thêm từng thẻ hoặc nhập danh sách từ tệp Excel."}</p>
         </div>
         {lesson.status !== "published" ? (
           <ActionForm action={publishLesson.bind(null, lessonId, classId)} className="space-y-2 sm:text-right" submitClassName="button-primary w-full sm:w-auto" submitLabel="Xuất bản" pendingLabel="Đang xuất bản" icon={<CheckCircle size={20} aria-hidden="true" />} />
@@ -77,8 +78,8 @@ export default async function LessonEditor({ params }: PageProps<"/teacher/class
             </ActionForm>
           </div>
           <details className="rounded-2xl bg-surface p-6">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 font-bold"><FileCsv size={22} aria-hidden="true" />Nhập từ CSV</summary>
-            <div className="mt-5"><CsvImporter action={importCards.bind(null, lessonId, classId)} /></div>
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 font-bold"><FileXls size={22} aria-hidden="true" />Nhập từ Excel</summary>
+            <div className="mt-5"><XlsxImporter action={importCards.bind(null, lessonId, classId)} /></div>
           </details>
         </aside>
       </div>

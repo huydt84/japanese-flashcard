@@ -27,7 +27,7 @@ The teaching workflow and the learning loop live together: teacher-authored kanj
 ## Operating Context
 
 - Vietnamese interface with Japanese learning content and Vietnamese meanings.
-- Teachers author cards individually or import a fixed CSV format.
+- Teachers author cards individually or import a fixed Excel (.xlsx) template.
 - Students study the published lessons of classes they have joined.
 - Invitations are delivered in-app and may wait for a matching Google account to register.
 

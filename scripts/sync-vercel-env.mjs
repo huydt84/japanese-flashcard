@@ -1,23 +1,18 @@
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { namesMarked, requireEnvironment, validateProductionEnvironment } from "./env-contract.mjs";
 
-const template = await readFile(new URL("../.env.template", import.meta.url), "utf8");
-const variableNames = [...template.matchAll(/^([A-Z][A-Z0-9_]*)\s*=/gm)]
-  .map((match) => match[1])
-  .filter((name) => !name.startsWith("LOCAL_"));
+const variableNames = await namesMarked("vercel");
 
 if (!variableNames.length) throw new Error(".env.template does not declare any deployable environment variables.");
+requireEnvironment(variableNames);
+requireEnvironment(["SUPABASE_PROJECT_REF"]);
+validateProductionEnvironment();
 
 for (const name of variableNames) {
   const value = process.env[name];
-  if (!value) throw new Error(`${name} is missing from .env.`);
-  if (/^NEXT_PUBLIC_(SITE|SUPABASE)_URL$/.test(name) && /localhost|127\.0\.0\.1/.test(value)) {
-    throw new Error(`${name} must not point to a local address during deployment.`);
-  }
-
   const child = spawn(
     "pnpm",
-    ["exec", "vercel", "env", "add", name, "production,preview", "--force", "--sensitive", "--yes"],
+    ["exec", "vercel", "env", "add", name, "production,preview", "--force", "--yes"],
     { stdio: ["pipe", "inherit", "inherit"] },
   );
   child.stdin.end(value);

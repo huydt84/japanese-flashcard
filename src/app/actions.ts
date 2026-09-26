@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { ZodError } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { cardSchema, classSchema, inviteSchema, lessonSchema, roleSchema, uuidSchema } from "@/lib/validation";
-import { parseCardCsv } from "@/lib/csv";
+import { parseCardXlsx } from "@/lib/xlsx";
 import { nextReview } from "@/lib/fsrs";
 import { resolveWorkspaceRole } from "@/lib/roles";
 import type { ActionState } from "@/lib/action-state";
@@ -89,6 +89,23 @@ export async function createLesson(classId: string, previous: ActionState, formD
   redirect(`/teacher/classes/${classId}/lessons/${lessonId}`);
 }
 
+export async function updateLessonTitle(lessonId: string, classId: string, previous: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    uuidSchema.parse(lessonId); uuidSchema.parse(classId);
+    const { title } = lessonSchema.pick({ title: true }).parse({ title: formData.get("title") });
+    const { supabase } = await userForRole("teacher");
+    const { data, error } = await supabase.from("lessons").update({ title }).eq("id", lessonId).eq("class_id", classId).select("id").single();
+    if (error || !data) throw new Error("Không thể đổi tên buổi học. Hãy thử lại.");
+    revalidatePath(`/teacher/classes/${classId}`);
+    revalidatePath(`/teacher/classes/${classId}/lessons/${lessonId}`);
+    revalidatePath("/student");
+    revalidatePath(`/study/${lessonId}`);
+    return result(previous, "success", "Đã đổi tên buổi học.");
+  } catch (error) {
+    return failure(previous, error, "Không thể đổi tên buổi học. Hãy thử lại.");
+  }
+}
+
 export async function addCard(lessonId: string, classId: string, previous: ActionState, formData: FormData): Promise<ActionState> {
   try {
     uuidSchema.parse(lessonId); uuidSchema.parse(classId);
@@ -146,9 +163,12 @@ export async function moveCard(cardId: string, direction: "up" | "down", lessonI
 
 export async function importCards(lessonId: string, classId: string, previous: ActionState, formData: FormData): Promise<ActionState> {
   try {
-    const parsed = parseCardCsv(String(formData.get("csv") ?? ""));
-    if (parsed.errors.length) return result(previous, "error", parsed.errors.map((error) => `Dòng ${error.line}: ${error.message}`).join("; "));
+    uuidSchema.parse(lessonId); uuidSchema.parse(classId);
     const { supabase } = await userForRole("teacher");
+    const file = formData.get("xlsx");
+    if (!(file instanceof File)) return result(previous, "error", "Hãy chọn tệp Excel .xlsx");
+    const parsed = await parseCardXlsx(file);
+    if (parsed.errors.length) return result(previous, "error", parsed.errors.slice(0, 4).map((error) => `Hàng ${error.row}: ${error.message}`).join("; ") + (parsed.errors.length > 4 ? `; và ${parsed.errors.length - 4} lỗi khác` : ""));
     const { data: lastCard } = await supabase.from("cards").select("position").eq("lesson_id", lessonId).order("position", { ascending: false }).limit(1).maybeSingle();
     const firstPosition = (lastCard?.position ?? -1) + 1;
     const { error } = await supabase.from("cards").insert(parsed.rows.map((row, index) => ({ ...row, lesson_id: lessonId, position: firstPosition + index })));

@@ -91,7 +91,7 @@ export default async function ClassPage({ params }: PageProps<"/teacher/classes/
           <div className="rounded-2xl bg-surface-strong p-6 paper-shadow">
             <div className="flex items-center gap-3"><Plus size={22} className="text-brand" aria-hidden="true" /><h2 className="text-xl font-bold">Tạo bài học</h2></div>
             <ActionForm action={createLesson.bind(null, classId)} className="mt-5 space-y-4" submitClassName="button-primary w-full" submitLabel="Tạo bài" pendingLabel="Đang tạo bài">
-              <div><label className="label" htmlFor="title">Tên bài</label><input className="field" id="title" name="title" required minLength={2} maxLength={100} placeholder="Động từ mỗi ngày" /></div>
+              <div><label className="label" htmlFor="title">Tên bài</label><input className="field" id="title" name="title" required minLength={2} maxLength={100} defaultValue={`Buổi ${(lessons?.length ?? 0) + 1}`} /></div>
               <div><label className="label" htmlFor="lesson-description">Mô tả</label><textarea className="field" id="lesson-description" name="description" rows={2} maxLength={300} /></div>
             </ActionForm>
           </div>

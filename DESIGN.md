@@ -170,7 +170,7 @@ Dark mode preserves the same semantic roles with `canvas` `#14191f`, `surface` `
 **Display Font:** Geist (with sans-serif fallback)  
 **Body Font:** Geist (with sans-serif fallback)  
 **Japanese Font:** Noto Sans JP (with sans-serif fallback)  
-**Label/Mono Font:** Geist for labels; Geist Mono for CSV and machine-formatted text
+**Label/Mono Font:** Geist for labels; Geist Mono for spreadsheet headers and machine-formatted text
 
 **Character:** Geist keeps the Vietnamese interface compact, contemporary, and matter-of-fact. Noto Sans JP makes Japanese study content feel native to the same system while carrying enough scale and weight to become the visual focus.
 
