@@ -1,0 +1,205 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-16T09:42:42Z",
+  "title": "Design System: Kotoba",
+  "extensions": {
+    "colorMeta": {
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Mineral Canvas",
+        "canonical": "#edf0f3",
+        "tonalRamp": ["oklch(15% 0.01 240)", "oklch(26% 0.01 240)", "oklch(38% 0.01 240)", "oklch(50% 0.01 240)", "oklch(62% 0.01 240)", "oklch(74% 0.01 240)", "oklch(86% 0.01 240)", "oklch(95% 0.01 240)"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Quiet Paper",
+        "canonical": "#f9fafb",
+        "tonalRamp": ["oklch(15% 0.006 240)", "oklch(26% 0.006 240)", "oklch(38% 0.006 240)", "oklch(50% 0.006 240)", "oklch(62% 0.006 240)", "oklch(74% 0.006 240)", "oklch(86% 0.006 240)", "oklch(97% 0.006 240)"]
+      },
+      "surface-strong": {
+        "role": "neutral",
+        "displayName": "Bright Paper",
+        "canonical": "#ffffff",
+        "tonalRamp": ["oklch(15% 0 0)", "oklch(26% 0 0)", "oklch(38% 0 0)", "oklch(50% 0 0)", "oklch(62% 0 0)", "oklch(74% 0 0)", "oklch(86% 0 0)", "oklch(100% 0 0)"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Charcoal Ink",
+        "canonical": "#1e252d",
+        "tonalRamp": ["oklch(15% 0.02 250)", "oklch(26% 0.02 250)", "oklch(38% 0.02 250)", "oklch(50% 0.02 250)", "oklch(62% 0.02 250)", "oklch(74% 0.02 250)", "oklch(86% 0.02 250)", "oklch(95% 0.02 250)"]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Pencil Grey",
+        "canonical": "#596570",
+        "tonalRamp": ["oklch(15% 0.02 245)", "oklch(26% 0.02 245)", "oklch(38% 0.02 245)", "oklch(50% 0.02 245)", "oklch(62% 0.02 245)", "oklch(74% 0.02 245)", "oklch(86% 0.02 245)", "oklch(95% 0.02 245)"]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Desk Line",
+        "canonical": "#d8dde2",
+        "tonalRamp": ["oklch(15% 0.01 240)", "oklch(26% 0.01 240)", "oklch(38% 0.01 240)", "oklch(50% 0.01 240)", "oklch(62% 0.01 240)", "oklch(74% 0.01 240)", "oklch(86% 0.01 240)", "oklch(95% 0.01 240)"]
+      },
+      "brand": {
+        "role": "primary",
+        "displayName": "Kotoba Vermilion",
+        "canonical": "#c63d3d",
+        "tonalRamp": ["oklch(15% 0.12 25)", "oklch(26% 0.14 25)", "oklch(38% 0.16 25)", "oklch(50% 0.17 25)", "oklch(62% 0.16 25)", "oklch(74% 0.13 25)", "oklch(86% 0.08 25)", "oklch(95% 0.03 25)"]
+      },
+      "brand-strong": {
+        "role": "primary",
+        "displayName": "Pressed Vermilion",
+        "canonical": "#a82e32",
+        "tonalRamp": ["oklch(15% 0.12 24)", "oklch(26% 0.15 24)", "oklch(38% 0.17 24)", "oklch(50% 0.18 24)", "oklch(62% 0.16 24)", "oklch(74% 0.13 24)", "oklch(86% 0.08 24)", "oklch(95% 0.03 24)"]
+      },
+      "wrong": {
+        "role": "tertiary",
+        "displayName": "Answer Red",
+        "canonical": "#d73b3e",
+        "tonalRamp": ["oklch(15% 0.12 24)", "oklch(26% 0.15 24)", "oklch(38% 0.18 24)", "oklch(50% 0.2 24)", "oklch(62% 0.18 24)", "oklch(74% 0.14 24)", "oklch(86% 0.09 24)", "oklch(95% 0.04 24)"]
+      },
+      "unsure": {
+        "role": "tertiary",
+        "displayName": "Uncertain Amber",
+        "canonical": "#a86600",
+        "tonalRamp": ["oklch(15% 0.08 70)", "oklch(26% 0.11 70)", "oklch(38% 0.14 70)", "oklch(50% 0.16 70)", "oklch(62% 0.15 70)", "oklch(74% 0.12 70)", "oklch(86% 0.08 70)", "oklch(95% 0.03 70)"]
+      },
+      "correct": {
+        "role": "tertiary",
+        "displayName": "Success Green",
+        "canonical": "#168a55",
+        "tonalRamp": ["oklch(15% 0.08 155)", "oklch(26% 0.11 155)", "oklch(38% 0.14 155)", "oklch(50% 0.16 155)", "oklch(62% 0.14 155)", "oklch(74% 0.11 155)", "oklch(86% 0.07 155)", "oklch(95% 0.03 155)"]
+      },
+      "focus": {
+        "role": "secondary",
+        "displayName": "Focus Blue",
+        "canonical": "#245e9b",
+        "tonalRamp": ["oklch(15% 0.08 250)", "oklch(26% 0.11 250)", "oklch(38% 0.14 250)", "oklch(50% 0.16 250)", "oklch(62% 0.14 250)", "oklch(74% 0.11 250)", "oklch(86% 0.07 250)", "oklch(95% 0.03 250)"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Landing promise only." },
+      "headline": { "displayName": "Headline", "purpose": "Page titles and completion states." },
+      "title": { "displayName": "Title", "purpose": "Section and surface headings." },
+      "body": { "displayName": "Body", "purpose": "Operational explanations and supporting copy." },
+      "label": { "displayName": "Label", "purpose": "Controls, fields, navigation, and metadata." },
+      "japanese-display": { "displayName": "Japanese Display", "purpose": "The kanji face of the active study card." }
+    },
+    "shadows": [
+      { "name": "paper-lift", "value": "0 22px 55px rgba(49, 63, 77, 0.12)", "purpose": "Soft ambient lift for flashcards, focused forms, role choices, and review controls." },
+      { "name": "paper-lift-dark", "value": "0 24px 60px rgba(0, 0, 0, 0.32)", "purpose": "Dark-mode counterpart to Paper Lift." },
+      { "name": "focus-ring", "value": "0 0 0 3px color-mix(in srgb, var(--focus) 45%, transparent)", "purpose": "Visible keyboard focus on all interactive elements." }
+    ],
+    "motion": [
+      { "name": "state-standard", "value": "180ms ease", "purpose": "Button color and press-state transitions." },
+      { "name": "card-enter", "value": "420ms cubic-bezier(.16, 1, .3, 1)", "purpose": "A new study card settles onto the desk." },
+      { "name": "card-flip", "value": "620ms cubic-bezier(.16, 1, .3, 1)", "purpose": "Front and back move as one physical plane." },
+      { "name": "controls-ready", "value": "380ms cubic-bezier(.16, 1, .3, 1)", "purpose": "Answer controls become available after the card flips." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single strongest action in a working region.",
+      "html": "<button class=\"ds-btn-primary\">Tạo lớp</button>",
+      "css": ".ds-btn-primary { display:inline-flex; min-height:44px; align-items:center; justify-content:center; gap:.5rem; border:0; border-radius:12px; background:var(--brand,#c63d3d); color:#fff; padding:.7rem 1rem; font:700 .86rem/1.25 Geist,sans-serif; transition:background .18s ease,transform .18s ease; cursor:pointer; } .ds-btn-primary:hover { background:var(--brand-strong,#a82e32); } .ds-btn-primary:focus-visible { outline:none; box-shadow:0 0 0 3px color-mix(in srgb,var(--focus,#245e9b) 45%,transparent); } .ds-btn-primary:active { transform:translateY(1px); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A quiet bordered action for alternatives and review links.",
+      "html": "<button class=\"ds-btn-secondary\">Mở thông báo</button>",
+      "css": ".ds-btn-secondary { display:inline-flex; min-height:44px; align-items:center; justify-content:center; gap:.5rem; border:1px solid var(--line,#d8dde2); border-radius:12px; background:var(--surface-strong,#fff); color:var(--ink,#1e252d); padding:.7rem 1rem; font:650 .86rem/1.25 Geist,sans-serif; transition:background .18s ease,transform .18s ease; cursor:pointer; } .ds-btn-secondary:hover { background:var(--surface,#f9fafb); } .ds-btn-secondary:focus-visible { outline:none; box-shadow:0 0 0 3px color-mix(in srgb,var(--focus,#245e9b) 45%,transparent); } .ds-btn-secondary:active { transform:translateY(1px); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "The standard paper-like authoring field.",
+      "html": "<label class=\"ds-field-label\" for=\"ds-class-name\">Tên lớp</label><input class=\"ds-field\" id=\"ds-class-name\" placeholder=\"Tiếng Nhật cùng Mai\">",
+      "css": ".ds-field-label { display:block; margin-bottom:.45rem; color:var(--ink,#1e252d); font:650 .86rem/1.25 Geist,sans-serif; } .ds-field { width:100%; border:1px solid var(--line,#d8dde2); border-radius:12px; background:var(--surface-strong,#fff); color:var(--ink,#1e252d); padding:.8rem .9rem; font:400 1rem/1.5 Geist,sans-serif; } .ds-field::placeholder { color:var(--muted,#596570); } .ds-field:hover { border-color:var(--muted,#596570); } .ds-field:focus { outline:none; border-color:var(--focus,#245e9b); box-shadow:0 0 0 3px color-mix(in srgb,var(--focus,#245e9b) 20%,transparent); }"
+    },
+    {
+      "name": "Navigation Item",
+      "kind": "nav",
+      "refersTo": "navigation-item",
+      "description": "A compact app-shell destination that becomes paper-white on hover.",
+      "html": "<a class=\"ds-nav-item\" href=\"#\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3Z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/></svg>Tổng quan</a>",
+      "css": ".ds-nav-item { display:inline-flex; min-height:44px; align-items:center; gap:.75rem; border-radius:12px; padding:0 .75rem; color:var(--ink,#1e252d); text-decoration:none; font:650 .9rem/1.25 Geist,sans-serif; transition:background .18s ease; } .ds-nav-item svg { width:20px; height:20px; } .ds-nav-item:hover { background:var(--surface-strong,#fff); } .ds-nav-item:focus-visible { outline:none; box-shadow:0 0 0 3px color-mix(in srgb,var(--focus,#245e9b) 45%,transparent); } .ds-nav-item:active { transform:translateY(1px); }"
+    },
+    {
+      "name": "Published Status",
+      "kind": "chip",
+      "refersTo": "status-published",
+      "description": "A compact semantic label for a lesson that learners can access.",
+      "html": "<span class=\"ds-chip-published\">Đã xuất bản</span>",
+      "css": ".ds-chip-published { display:inline-flex; align-items:center; border-radius:9999px; background:color-mix(in srgb,var(--correct,#168a55) 10%,transparent); color:var(--correct,#168a55); padding:.25rem .625rem; font:700 .75rem/1 Geist,sans-serif; }"
+    },
+    {
+      "name": "Paper Card",
+      "kind": "card",
+      "refersTo": "paper-card",
+      "description": "An elevated work surface reserved for focused authoring or study.",
+      "html": "<article class=\"ds-paper-card\"><p class=\"ds-paper-kicker\">Bài học đang mở</p><h3>Động từ mỗi ngày</h3><p>18 thẻ · 6 thẻ đến hạn</p></article>",
+      "css": ".ds-paper-card { max-width:360px; border-radius:16px; background:var(--surface-strong,#fff); color:var(--ink,#1e252d); padding:24px; box-shadow:var(--shadow,0 22px 55px rgba(49,63,77,.12)); font-family:Geist,sans-serif; transition:transform .18s ease; } .ds-paper-card:hover { transform:translateY(-4px); } .ds-paper-card:focus-within { box-shadow:0 0 0 3px color-mix(in srgb,var(--focus,#245e9b) 45%,transparent),var(--shadow,0 22px 55px rgba(49,63,77,.12)); } .ds-paper-card h3 { margin:.5rem 0; font-size:1.5rem; line-height:1.33; } .ds-paper-card p { margin:0; color:var(--muted,#596570); line-height:1.5; } .ds-paper-card .ds-paper-kicker { color:var(--brand,#c63d3d); font-size:.75rem; font-weight:700; }"
+    },
+    {
+      "name": "Study Card",
+      "kind": "custom",
+      "refersTo": "paper-card",
+      "description": "The dominant learning object, showing one kanji at near-reading scale.",
+      "html": "<button class=\"ds-study-card\" aria-label=\"Lật thẻ để xem đáp án\"><span>Nhấn Space hoặc chạm để lật</span><strong>学ぶ</strong><small>KANJI</small></button>",
+      "css": ".ds-study-card { display:flex; width:min(100%,768px); min-height:430px; flex-direction:column; justify-content:space-between; overflow:hidden; border:0; border-radius:16px; background:var(--surface-strong,#fff); color:var(--ink,#1e252d); padding:28px; text-align:left; box-shadow:var(--shadow,0 22px 55px rgba(49,63,77,.12)); cursor:pointer; transition:transform .18s ease; } .ds-study-card:hover { transform:translateY(-4px); } .ds-study-card:focus-visible { outline:none; box-shadow:0 0 0 3px color-mix(in srgb,var(--focus,#245e9b) 45%,transparent),var(--shadow,0 22px 55px rgba(49,63,77,.12)); } .ds-study-card:active { transform:translateY(1px); } .ds-study-card span { color:var(--muted,#596570); font:650 .875rem/1.25 Geist,sans-serif; } .ds-study-card strong { align-self:center; font:600 clamp(5rem,16vw,9rem)/1 'Noto Sans JP',sans-serif; letter-spacing:-.03em; } .ds-study-card small { align-self:flex-end; color:var(--muted,#596570); font:700 .75rem/1 Geist,sans-serif; letter-spacing:.08em; }"
+    },
+    {
+      "name": "Review Controls",
+      "kind": "custom",
+      "refersTo": "review-control",
+      "description": "The four labeled circular actions used after revealing a study card.",
+      "html": "<div class=\"ds-review-controls\"><button class=\"ds-review ds-review-undo\"><span>↶</span><b>Hoàn tác</b><kbd>U</kbd></button><button class=\"ds-review ds-review-wrong\"><span>×</span><b>Sai</b><kbd>1</kbd></button><button class=\"ds-review ds-review-unsure\"><span>?</span><b>Chưa chắc</b><kbd>2</kbd></button><button class=\"ds-review ds-review-correct\"><span>✓</span><b>Đúng</b><kbd>3</kbd></button></div>",
+      "css": ".ds-review-controls { display:grid; max-width:576px; grid-template-columns:repeat(4,1fr); gap:8px; font-family:Geist,sans-serif; } .ds-review { display:flex; flex-direction:column; align-items:center; gap:6px; border:0; background:transparent; color:var(--ink,#1e252d); cursor:pointer; } .ds-review span { display:grid; width:56px; height:56px; place-items:center; border-radius:9999px; background:var(--surface-strong,#fff); box-shadow:var(--shadow,0 22px 55px rgba(49,63,77,.12)); font-size:28px; font-weight:700; transition:transform .18s ease; } .ds-review:hover span { transform:translateY(-4px); } .ds-review:focus-visible { outline:none; } .ds-review:focus-visible span { box-shadow:0 0 0 3px color-mix(in srgb,var(--focus,#245e9b) 45%,transparent),var(--shadow,0 22px 55px rgba(49,63,77,.12)); } .ds-review:active span { transform:translateY(1px); } .ds-review b { font-size:12px; } .ds-review kbd { color:var(--muted,#596570); font-size:10px; } .ds-review-undo span { color:var(--muted,#596570); } .ds-review-wrong span { color:var(--wrong,#d73b3e); } .ds-review-unsure span { color:var(--unsure,#a86600); } .ds-review-correct span { color:var(--correct,#168a55); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Bàn học hiện đại",
+    "overview": "Kotoba feels like a calm modern study desk: a cool mineral workspace holds bright paper-like learning surfaces, precise charcoal type, and one restrained vermilion mark. The interface is quiet enough for long study sessions but never sterile; generous whitespace and highly legible Japanese type keep the learning object in command.\n\nThe same world spans persuasion and operation. The landing page pairs a concise promise with a live flashcard; teacher and student shells use planner-like rails and disciplined lists; the study session removes nearly everything except one physical card and its next action. Avoid ornamental Japanese motifs, decorative dashboards, and interchangeable card grids.",
+    "keyCharacteristics": [
+      "Cool mineral canvas with white paper surfaces",
+      "Large Japanese learning content paired with compact Vietnamese controls",
+      "Vermilion used sparingly for identity and primary action",
+      "Lists and dividers for information; elevated cards only for focused work",
+      "One physical-plane flip as the signature interaction"
+    ],
+    "rules": [
+      { "name": "The One Vermilion Voice Rule", "body": "Use vermilion for brand identity, the primary action, and immediate due-state emphasis; its rarity gives it authority.", "section": "colors" },
+      { "name": "The Feedback Is Meaning Rule", "body": "Red, amber, and green communicate answer or system status, always with a label or icon; never use them as decoration.", "section": "colors" },
+      { "name": "The Learning Object Leads Rule", "body": "Japanese content may be dramatically larger than the interface around it; Vietnamese controls remain compact and precise.", "section": "typography" },
+      { "name": "The One Dominant Object Rule", "body": "Each viewport has one clear working object—promise, list, form, or flashcard—and supporting regions must remain visually subordinate.", "section": "layout" },
+      { "name": "The Paper Is Earned Rule", "body": "Lists and passive containers stay flat; use paper lift only when the user is handling, choosing, or studying the surface.", "section": "elevation" },
+      { "name": "The Three-Radius Rule", "body": "Use `12px`, `16px`, or a full pill; introducing nearby radii weakens the system's precision.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do let one learning or authoring object dominate each view.",
+      "Do use flat lists, dividers, and whitespace for dense operational information.",
+      "Do keep interactive targets at least `44px` high and keyboard focus visibly blue.",
+      "Do pair every answer color with a label, icon, or status phrase.",
+      "Do keep the study controls reachable at the bottom of a narrow screen."
+    ],
+    "donts": [
+      "Don't decorate with torii gates, brush textures, rising suns, or other ornamental Japanese clichés.",
+      "Don't turn every dataset or action into an elevated dashboard card.",
+      "Don't use Answer Red, Uncertain Amber, or Success Green for non-semantic accents.",
+      "Don't compete with the active flashcard using secondary panels, dense chrome, or oversized navigation.",
+      "Don't invent new shadows, radii, or accent colors when the existing vocabulary already expresses the state."
+    ]
+  }
+}

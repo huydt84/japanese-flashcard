@@ -1,0 +1,2 @@
+"use client";
+export default function ErrorPage({reset}:{error:Error&{digest?:string};reset:()=>void}){return <main className="grid min-h-[100dvh] place-items-center px-5"><div className="max-w-lg text-center"><h1 className="text-4xl font-bold tracking-[-.035em]">Có điều gì đó chưa ổn.</h1><p className="mt-4 leading-relaxed text-muted">Không thể hoàn tất thao tác. Hãy tải lại dữ liệu và kiểm tra kết quả trước khi thử lần nữa.</p><button onClick={reset} className="button-primary mt-7">Tải lại dữ liệu</button></div></main>}

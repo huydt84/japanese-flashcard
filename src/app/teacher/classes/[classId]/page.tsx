@@ -1,0 +1,110 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { ArrowLeft, ArrowRight, EnvelopeSimple, Plus, X } from "@phosphor-icons/react/dist/ssr";
+import { createLesson, inviteStudent, revokeInvitation } from "@/app/actions";
+import { ActionForm } from "@/components/action-form";
+import { EmptyState } from "@/components/empty-state";
+import { requireProfile } from "@/lib/auth";
+
+export default async function ClassPage({ params }: PageProps<"/teacher/classes/[classId]">) {
+  const { classId } = await params;
+  const { supabase } = await requireProfile("teacher");
+  const [{ data: klass }, { data: lessons }, { data: members }, { data: invites }] = await Promise.all([
+    supabase.from("classes").select("id,name,description").eq("id", classId).single(),
+    supabase.from("lessons").select("id,title,status,cards(count)").eq("class_id", classId).order("position"),
+    supabase.from("class_memberships").select("student_id,profiles!class_memberships_student_id_fkey(display_name,email)").eq("class_id", classId),
+    supabase.from("class_invitations").select("id,email,status,created_at").eq("class_id", classId).eq("status", "pending"),
+  ]);
+  if (!klass) notFound();
+
+  const lessonIds = lessons?.map((lesson) => lesson.id) ?? [];
+  const { data: cards } = lessonIds.length ? await supabase.from("cards").select("id,lesson_id").in("lesson_id", lessonIds) : { data: [] };
+  const cardIds = cards?.map((card) => card.id) ?? [];
+  const [{ data: progress }, { data: logs }] = cardIds.length
+    ? await Promise.all([
+        supabase.from("card_progress").select("student_id,card_id,due_at").in("card_id", cardIds),
+        supabase.from("review_logs").select("student_id,card_id,rating,reviewed_at,undone_at").in("card_id", cardIds).is("undone_at", null),
+      ])
+    : [{ data: [] }, { data: [] }];
+  // Server Component progress is evaluated once for the current request.
+  // eslint-disable-next-line react-hooks/purity
+  const now = Date.now();
+
+  return (
+    <div className="mx-auto max-w-6xl">
+      <Link href="/teacher" className="quiet-link inline-flex min-h-11 items-center gap-2">
+        <ArrowLeft aria-hidden="true" /> Tất cả lớp
+      </Link>
+      <header className="mt-5">
+        <h1 className="break-words text-4xl font-bold tracking-[-.035em] sm:text-5xl">{klass.name}</h1>
+        <p className="mt-3 max-w-3xl break-words text-lg text-muted">{klass.description || "Chưa có mô tả."}</p>
+      </header>
+
+      <div className="mt-10 grid gap-10 xl:grid-cols-[1fr_360px]">
+        <div className="min-w-0">
+          <section aria-labelledby="lessons-heading">
+            <h2 id="lessons-heading" className="text-2xl font-bold">Bài học</h2>
+            <div className="mt-5">
+              {!lessons?.length ? (
+                <EmptyState title="Chưa có bài học" description="Tạo bài mới ở bên cạnh, thêm thẻ rồi xuất bản cho học viên." />
+              ) : (
+                <div className="divide-y divide-line border-y border-line">
+                  {lessons.map((lesson) => (
+                    <Link key={lesson.id} href={`/teacher/classes/${classId}/lessons/${lesson.id}`} className="group flex items-center justify-between gap-4 py-5">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <h3 className="break-words text-lg font-bold group-hover:text-brand">{lesson.title}</h3>
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${lesson.status === "published" ? "bg-correct/10 text-correct" : "bg-line/60 text-muted"}`}>{lesson.status === "published" ? "Đã xuất bản" : "Bản nháp"}</span>
+                        </div>
+                        <p className="mt-2 text-sm text-muted">{lesson.cards?.[0]?.count ?? 0} thẻ</p>
+                      </div>
+                      <ArrowRight className="shrink-0" aria-hidden="true" />
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="mt-12" aria-labelledby="progress-heading">
+            <h2 id="progress-heading" className="text-2xl font-bold">Tiến độ học viên</h2>
+            <div className="mt-5 overflow-x-auto border-y border-line" tabIndex={0} aria-label="Bảng tiến độ học viên, có thể cuộn ngang">
+              <table className="w-full min-w-[620px] text-left">
+                <thead className="text-xs font-bold text-muted"><tr><th className="py-3 pr-4">Học viên</th><th className="px-3 py-3">Đã học</th><th className="px-3 py-3">Đến hạn</th><th className="px-3 py-3">Tỷ lệ đúng</th><th className="py-3 pl-3">Lần gần nhất</th></tr></thead>
+                <tbody className="divide-y divide-line">
+                  {members?.map((member) => {
+                    const ownProgress = progress?.filter((item) => item.student_id === member.student_id) ?? [];
+                    const ownLogs = logs?.filter((item) => item.student_id === member.student_id) ?? [];
+                    const good = ownLogs.filter((item) => item.rating === "good").length;
+                    const latest = ownLogs.toSorted((a, b) => b.reviewed_at.localeCompare(a.reviewed_at))[0];
+                    const studentProfile = member.profiles as unknown as { display_name: string | null; email: string };
+                    return <tr key={member.student_id}><td className="py-4 pr-4"><p className="font-bold">{studentProfile.display_name || "Học viên"}</p><p className="text-sm text-muted">{studentProfile.email}</p></td><td className="px-3 py-4 font-semibold tabular-nums">{ownProgress.length}/{cardIds.length}</td><td className="px-3 py-4 font-semibold tabular-nums">{ownProgress.filter((item) => new Date(item.due_at).getTime() <= now).length}</td><td className="px-3 py-4 font-semibold tabular-nums">{ownLogs.length ? `${Math.round((good / ownLogs.length) * 100)}%` : "—"}</td><td className="py-4 pl-3 text-sm text-muted">{latest ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium" }).format(new Date(latest.reviewed_at)) : "Chưa học"}</td></tr>;
+                  })}
+                  {!members?.length && <tr><td colSpan={5} className="py-8 text-center text-muted">Chưa có học viên tham gia.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <aside className="space-y-7">
+          <div className="rounded-2xl bg-surface-strong p-6 paper-shadow">
+            <div className="flex items-center gap-3"><Plus size={22} className="text-brand" aria-hidden="true" /><h2 className="text-xl font-bold">Tạo bài học</h2></div>
+            <ActionForm action={createLesson.bind(null, classId)} className="mt-5 space-y-4" submitClassName="button-primary w-full" submitLabel="Tạo bài" pendingLabel="Đang tạo bài">
+              <div><label className="label" htmlFor="title">Tên bài</label><input className="field" id="title" name="title" required minLength={2} maxLength={100} placeholder="Động từ mỗi ngày" /></div>
+              <div><label className="label" htmlFor="lesson-description">Mô tả</label><textarea className="field" id="lesson-description" name="description" rows={2} maxLength={300} /></div>
+            </ActionForm>
+          </div>
+
+          <div className="rounded-2xl bg-surface p-6">
+            <div className="flex items-center gap-3"><EnvelopeSimple size={22} aria-hidden="true" /><h2 className="text-xl font-bold">Mời học viên</h2></div>
+            <ActionForm action={inviteStudent.bind(null, classId)} className="mt-5 space-y-3" submitClassName="button-primary w-full sm:w-auto" submitLabel="Mời" pendingLabel="Đang gửi" resetOnSuccess>
+              <div><label className="sr-only" htmlFor="invite-email">Email học viên</label><input className="field" id="invite-email" name="email" type="email" required maxLength={254} placeholder="hocvien@gmail.com" /></div>
+            </ActionForm>
+            {invites?.length ? <div className="mt-5 space-y-3">{invites.map((invite) => <div key={invite.id} className="flex flex-col gap-2 border-t border-line pt-3 sm:flex-row sm:items-center sm:justify-between"><span className="min-w-0 break-all text-sm text-muted">{invite.email}</span><ActionForm action={revokeInvitation.bind(null, invite.id, classId)} submitClassName="button-secondary shrink-0" submitLabel="Thu hồi" pendingLabel="Đang thu hồi" confirmMessage={`Thu hồi lời mời gửi đến ${invite.email}?`} icon={<X aria-hidden="true" />} /></div>)}</div> : null}
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
