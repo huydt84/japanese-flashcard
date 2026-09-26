@@ -13,19 +13,24 @@ Node.js 20.9 trở lên và pnpm 12 được khuyến nghị.
 
 ## Chạy local
 
+`.env` là nguồn cấu hình chuẩn cho development dùng backend thật và cho mỗi lần deploy. Tạo file này từ template một lần, sau đó điền cấu hình production:
+
 ```bash
 pnpm install
-cp .env.example .env.local
+cp .env.template .env
 pnpm dev
 ```
 
-```dotenv
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
+Next.js tự đọc `.env`. File này bị Git bỏ qua, còn `.env.template` được commit để làm danh sách biến chính thức.
+
+Để debug hoàn toàn cô lập với Supabase local, điền ba biến `LOCAL_*` trong cùng file `.env`, khởi động Supabase rồi chạy:
+
+```bash
+pnpm dlx supabase start
+pnpm run dev:local
 ```
 
-Nếu chưa có biến Supabase, landing page vẫn chạy và hiển thị hướng dẫn cấu hình; đăng nhập chưa hoạt động.
+`dev:local` ánh xạ các biến `LOCAL_*` sang cấu hình runtime và chỉ bật endpoint đăng nhập kiểm thử trong development. Nó không thay đổi `.env` và không thể đưa địa chỉ localhost lên Vercel. Không đặt service-role key vào biến `NEXT_PUBLIC_*`. Mỗi khi sửa `.env`, hãy khởi động lại server.
 
 ## Thiết lập Supabase
 
@@ -34,7 +39,7 @@ Nếu chưa có biến Supabase, landing page vẫn chạy và hiển thị hư�
 3. Trong Authentication, bật Google provider và nhập Google OAuth client ID/secret.
 4. Trong Google Cloud Console, thêm Supabase callback URL được hiển thị trong cấu hình Google provider.
 5. Trong Supabase URL Configuration, thêm `http://localhost:3000/auth/callback`, domain production và các Vercel preview cần kiểm thử.
-6. Sao chép Project URL và publishable key vào `.env.local` và Vercel Environment Variables.
+6. Sao chép Project URL và publishable key vào `.env`. Không chỉnh tay Vercel Environment Variables; lệnh deploy sẽ đồng bộ chúng từ file này.
 
 Migration tạo toàn bộ bảng, database functions, review/undo transaction và RLS. Không dùng service-role key trong frontend.
 
@@ -63,15 +68,13 @@ Nếu máy chưa có browser của Playwright: `pnpm exec playwright install chr
 
 ## Deploy Vercel
 
-Sau khi cấu hình Supabase và Google OAuth:
+Sau khi cấu hình Supabase và Google OAuth, chạy một lệnh:
 
 ```bash
-vercel
-vercel env add NEXT_PUBLIC_SITE_URL production
-vercel env add NEXT_PUBLIC_SUPABASE_URL production
-vercel env add NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY production
-vercel --prod
+pnpm run deploy:prod
 ```
+
+`deploy:prod` đọc `.env`, dùng `.env.template` làm allowlist, đồng bộ mọi biến không bắt đầu bằng `LOCAL_` lên Vercel Production và Preview, rồi mới deploy. Lệnh sẽ dừng nếu thiếu biến hoặc nếu URL production trỏ vào localhost. Việc này khiến `.env` trở thành nguồn cấu hình chính thay vì dựa vào giá trị chỉ tồn tại trong Vercel.
 
 Sau lần deploy đầu, cập nhật Site URL/Redirect URLs trong Supabase và Authorized origins/redirects trong Google Cloud bằng domain production, rồi đăng nhập thử trên domain thật.
 
@@ -83,4 +86,3 @@ Sau lần deploy đầu, cập nhật Site URL/Redirect URLs trong Supabase và 
 - `src/app/actions.ts`: mutations đã xác thực
 - `supabase/migrations`: schema, transaction functions và RLS
 - `PRODUCT.md`: product truth đã xác nhận
-
