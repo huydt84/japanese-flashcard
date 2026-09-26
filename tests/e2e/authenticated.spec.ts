@@ -169,6 +169,23 @@ test("teacher previews draft and published lessons without writing student progr
   await expect(page.getByText("読む", { exact: true })).toBeVisible();
   await startFlashcards(page);
   await expect(page.getByText("1 / 2", { exact: true })).toBeVisible();
+  if (testInfo.project.name === "desktop") {
+    const originalViewport = page.viewportSize();
+    for (const [width, height] of [[320, 760], [1440, 900], [1920, 1080]] as const) {
+      await page.setViewportSize({ width, height });
+      await expect(page.locator(".flip-stage")).toBeVisible();
+      await expect(page.getByRole("button", { name: /Sai, phím 1/ })).toBeVisible();
+      await expect(page.getByRole("button", { name: /Đúng, phím 3/ })).toBeVisible();
+      if (width === 320) {
+        const card = await page.locator(".flip-stage").boundingBox();
+        const controls = await page.locator(".answer-controls").boundingBox();
+        expect(card && controls && card.y + card.height <= controls.y + 1).toBe(true);
+      }
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: `.impeccable/review/study-swipe-${width}.png`, fullPage: true });
+    }
+    if (originalViewport) await page.setViewportSize(originalViewport);
+  }
   await page.getByRole("button", { name: "Lật thẻ để xem đáp án" }).click();
   await expect(page.getByText("よむ", { exact: true })).toBeVisible();
   expect(await page.locator(".flip-stage").ariaSnapshot()).toContain("よむ");
@@ -198,6 +215,30 @@ test("teacher previews draft and published lessons without writing student progr
   await page.getByRole("button", { name: /Đúng, phím 3/ }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("書く", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: /Sai, phím 1/ }).click();
+  await page.getByRole("button", { name: "Xem lại từ đầu" }).click();
+  const dragCard = async (distance: number) => {
+    const bounds = await page.locator(".flip-stage").boundingBox();
+    if (!bounds) throw new Error("Study card is not visible");
+    const x = bounds.x + bounds.width / 2;
+    const y = bounds.y + bounds.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + distance, y, { steps: 8 });
+    await page.mouse.up();
+  };
+  await dragCard(45);
+  await expect(page.getByText("1 / 2", { exact: true })).toBeVisible();
+  await expect(page.locator(".flip-stage")).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 0)");
+  await page.getByRole("button", { name: "Lật thẻ để xem đáp án" }).focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByText("よむ", { exact: true })).toBeVisible();
+  await page.keyboard.press("Space");
+  await dragCard(120);
+  await expect(page.getByText("2 / 2", { exact: true })).toBeVisible();
+  await dragCard(-120);
+  await expect(page.getByRole("heading", { name: "Đã xem hết thẻ." })).toBeVisible();
 
   const admin = createClient(apiUrl, secretKey, { auth: { persistSession: false } });
   const [{ count: progressCount, error: progressError }, { count: reviewCount, error: reviewError }] = await Promise.all([

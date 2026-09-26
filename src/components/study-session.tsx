@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type PointerEvent as ReactPointerEvent } from "react";
 import { ArrowCounterClockwise, CaretDown, Check, QuestionMark, Shuffle, X } from "@phosphor-icons/react";
 import { submitReview, undoReview } from "@/app/actions";
 import type { ReviewRating, StudyCard, StudyDirection } from "@/lib/types";
@@ -11,6 +11,7 @@ const actions = [
   { rating: "hard" as const, label: "Chưa chắc", key: "2", Icon: QuestionMark, tone: "text-unsure" },
   { rating: "good" as const, label: "Đúng", key: "3", Icon: Check, tone: "text-correct" },
 ];
+const SWIPE_THRESHOLD = 90;
 
 type StudySessionProps = {
   mode: "study" | "preview";
@@ -29,7 +30,13 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
   const [last, setLast] = useState<StudyCard | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [swipeSettling, setSwipeSettling] = useState(false);
   const [pending, startTransition] = useTransition();
+  const gesture = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null);
+  const suppressClick = useRef(false);
+  const swipeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionId = useMemo(() => mode === "study" ? crypto.randomUUID() : null, [mode]);
   const total = sessionCards.length;
   const current = queue[0];
@@ -38,9 +45,10 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
   const finished = !current;
 
   useEffect(() => { heading.current?.focus({ preventScroll: true }); }, [finished]);
+  useEffect(() => () => { if (swipeTimer.current) clearTimeout(swipeTimer.current); }, []);
 
-  const grade = useCallback((rating: ReviewRating) => {
-    if (!current || pending) return;
+  const grade = useCallback((rating: ReviewRating, fromSwipe = false) => {
+    if (!current || pending || (swipeSettling && !fromSwipe)) return;
     setError("");
     setNotice("");
 
@@ -48,6 +56,8 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
       setLast(current);
       setQueue((items) => items.slice(1));
       setFlipped(backFirst);
+      setSwipeOffset(0);
+      setSwipeSettling(false);
       return;
     }
 
@@ -57,14 +67,55 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
         setLast(current);
         setQueue((items) => items.slice(1));
         setFlipped(backFirst);
+        setSwipeOffset(0);
+        setSwipeSettling(false);
       } catch {
+        setSwipeOffset(0);
+        setSwipeSettling(false);
         setError("Không thể lưu câu trả lời. Hãy kiểm tra kết nối và thử lại.");
       }
     });
-  }, [backFirst, current, mode, pending, sessionId]);
+  }, [backFirst, current, mode, pending, sessionId, swipeSettling]);
+
+  const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (pending || swipeSettling || !event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) return;
+    suppressClick.current = false;
+    gesture.current = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const onPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const start = gesture.current;
+    if (!start || start.id !== event.pointerId) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (!start.moved && (Math.abs(dx) < 10 || Math.abs(dx) <= Math.abs(dy) * 1.2)) return;
+    start.moved = true;
+    setDragging(true);
+    setSwipeOffset(Math.max(-180, Math.min(180, dx)));
+  };
+
+  const onPointerEnd = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const start = gesture.current;
+    if (!start || start.id !== event.pointerId) return;
+    gesture.current = null;
+    const dx = event.clientX - start.x;
+    setDragging(false);
+    if (start.moved && event.type !== "pointercancel") suppressClick.current = true;
+    if (event.type === "pointercancel" || !start.moved || Math.abs(dx) < SWIPE_THRESHOLD) {
+      setSwipeOffset(0);
+      return;
+    }
+    setSwipeOffset(dx < 0 ? -180 : 180);
+    setSwipeSettling(true);
+    swipeTimer.current = setTimeout(() => {
+      swipeTimer.current = null;
+      grade(dx < 0 ? "again" : "good", true);
+    }, window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 170);
+  };
 
   const undo = useCallback(() => {
-    if (pending) return;
+    if (pending || swipeSettling) return;
     setError("");
     if (!last) {
       setNotice("Chưa có câu trả lời để hoàn tác.");
@@ -89,10 +140,10 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
         setError("Không thể hoàn tác câu trả lời gần nhất.");
       }
     });
-  }, [backFirst, last, mode, pending, sessionId]);
+  }, [backFirst, last, mode, pending, sessionId, swipeSettling]);
 
   const shuffle = () => {
-    if (pending || queue.length < 2) return;
+    if (pending || swipeSettling || queue.length < 2) return;
     const shuffled = [...queue];
     for (let index = shuffled.length - 1; index > 0; index--) {
       const other = Math.floor(Math.random() * (index + 1));
@@ -106,6 +157,8 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
 
   const restart = () => {
     setQueue(sessionCards);
+    setSwipeOffset(0);
+    setSwipeSettling(false);
     setFlipped(backFirst);
     setLast(null);
     setError("");
@@ -152,7 +205,7 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
     <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-4xl flex-col pb-28 md:pb-8">
       <header className="flex items-center justify-between gap-5">
         <div className="min-w-0">
-          <button type="button" onClick={onExit} disabled={pending} className="quiet-link min-h-11 text-sm">Quay lại bài học</button>
+          <button type="button" onClick={onExit} disabled={pending || swipeSettling} className="quiet-link min-h-11 text-sm">Quay lại bài học</button>
           <h1 ref={heading} tabIndex={-1} className="mt-2 break-words text-lg font-bold">{lessonTitle}</h1>
           {mode === "preview" ? <p className="mt-1 text-sm font-semibold text-muted">Xem thử · Không lưu kết quả</p> : null}
         </div>
@@ -175,7 +228,7 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
                 setFlipped(nextBackFirst);
                 setNotice("");
               }}
-              disabled={pending}
+              disabled={pending || swipeSettling}
               className="field study-direction min-h-11 text-sm font-semibold"
             >
               <option value="front-first">Mặt trước → Mặt sau</option>
@@ -187,7 +240,7 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
         <button
           type="button"
           onClick={shuffle}
-          disabled={pending || queue.length < 2}
+          disabled={pending || swipeSettling || queue.length < 2}
           className="button-secondary shrink-0 text-sm"
           title={queue.length < 2 ? "Cần ít nhất 2 thẻ còn lại để tráo" : "Tráo ngẫu nhiên các thẻ còn lại"}
         >
@@ -195,14 +248,16 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
           Tráo thẻ
         </button>
       </div>
-      <div className="flex flex-1 items-center justify-center py-8">
+      <div className="flex flex-1 flex-col items-center justify-center py-4 sm:py-8">
         <div
           key={current.id}
-          className="flip-stage paper-shadow card-enter relative min-h-[430px] w-full max-w-3xl rounded-2xl bg-surface-strong text-left sm:min-h-[520px]"
+          className={`flip-stage paper-shadow card-enter relative min-h-[clamp(340px,calc(100dvh-400px),430px)] w-full max-w-3xl rounded-2xl bg-surface-strong text-left sm:min-h-[520px] ${dragging ? "is-dragging" : ""}`}
+          style={{ transform: `translateX(${swipeOffset}px) rotate(${swipeOffset / 22}deg)`, opacity: swipeSettling ? 0.55 : 1 }}
         >
-          <span className={`flip-plane block min-h-[430px] sm:min-h-[520px] ${flipped ? "is-flipped" : ""}`}>
+          {Math.abs(swipeOffset) > 24 ? <span className={`swipe-verdict absolute top-5 z-10 rounded-full px-4 py-2 text-sm font-bold ${swipeOffset < 0 ? "left-5 bg-wrong/10 text-wrong" : "right-5 bg-correct/10 text-correct"}`}>{swipeOffset < 0 ? "Sai" : "Đúng"}</span> : null}
+          <span className={`flip-plane block min-h-[clamp(340px,calc(100dvh-400px),430px)] sm:min-h-[520px] ${flipped ? "is-flipped" : ""}`}>
             <span role="group" aria-label="Mặt trước" aria-hidden={flipped} className="flip-face flip-front p-7 sm:p-12">
-              <span className="text-sm font-semibold text-muted">Nhấn Space hoặc chạm để lật</span>
+              <span className="text-sm font-semibold text-muted">Chạm để lật · Vuốt trái Sai / phải Đúng</span>
               <span className="font-jp break-words text-center text-[clamp(5rem,16vw,9rem)] font-semibold leading-none tracking-[-.03em]">{current.kanji}</span>
               <span className="text-right text-xs font-bold uppercase tracking-[.08em] text-muted">Kanji</span>
             </span>
@@ -218,16 +273,24 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
                   <span className="mt-3 block break-words text-base leading-relaxed text-muted sm:text-lg">{current.example_vi}</span>
                 </span>
               </span>
-              <span className="text-right text-xs font-bold uppercase tracking-[.08em] text-muted">Chọn mức độ nhớ bên dưới</span>
+              <span className="text-right text-xs font-bold uppercase tracking-[.08em] text-muted">Vuốt trái Sai · Vuốt phải Đúng</span>
             </span>
           </span>
           <button
             type="button"
-            onClick={() => setFlipped((value) => !value)}
+            onClick={(event) => {
+              if (suppressClick.current && event.detail !== 0) { suppressClick.current = false; return; }
+              if (!pending && !swipeSettling) setFlipped((value) => !value);
+            }}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerEnd}
+            onPointerCancel={onPointerEnd}
             className="flip-hit-target absolute inset-0 z-10 w-full cursor-pointer rounded-2xl"
             aria-label={flipped ? "Xem mặt kanji" : "Lật thẻ để xem đáp án"}
           />
         </div>
+        <p className="mt-5 hidden text-center text-xs font-semibold text-muted md:block">Vuốt trái: Sai · Vuốt phải: Đúng · Chạm để lật</p>
       </div>
       {error && <p role="alert" className="mb-4 text-center text-sm font-semibold text-wrong">{error}</p>}
       <p role="status" className="mb-4 min-h-5 text-center text-sm text-muted">{pending ? "Đang lưu thay đổi…" : notice}</p>
@@ -238,7 +301,7 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
               key={label}
               type="button"
               onClick={() => rating ? grade(rating) : undo()}
-              aria-disabled={pending}
+              aria-disabled={pending || swipeSettling}
               className="group flex cursor-pointer flex-col items-center gap-1.5 aria-disabled:cursor-wait"
               aria-label={`${label}, phím ${key}`}
             >
