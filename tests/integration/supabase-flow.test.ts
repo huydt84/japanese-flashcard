@@ -83,6 +83,8 @@ run("authenticated teacher-to-student flow and RLS", () => {
 
   it("keeps the selected role immutable", async () => {
     expect((await teacher.rpc("set_my_role", { chosen_role: "student" })).error).toBeTruthy();
+    expect((await teacher.rpc("set_admin_mode", { selected_mode: "student" })).error).toBeTruthy();
+    expect((await student.rpc("set_admin_mode", { selected_mode: "teacher" })).error).toBeTruthy();
     expect((await teacher.from("profiles").update({ role: "student" }).eq("id", userIds[0]).select("role")).data).toEqual([]);
     expect((await teacher.from("profiles").select("role").eq("id", userIds[0]).single()).data?.role).toBe("teacher");
   });

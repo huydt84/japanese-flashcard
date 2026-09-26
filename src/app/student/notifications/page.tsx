@@ -2,16 +2,10 @@ import { Check, X } from "@phosphor-icons/react/dist/ssr";
 import { respondInvitation } from "@/app/actions";
 import { ActionForm } from "@/components/action-form";
 import { EmptyState } from "@/components/empty-state";
-import { requireProfile } from "@/lib/auth";
+import { getStudentNotifications } from "@/lib/student-notifications";
 
 export default async function Notifications() {
-  const { profile, supabase } = await requireProfile("student");
-  const { data: invites } = await supabase
-    .from("class_invitations")
-    .select("id,created_at,classes(name,description)")
-    .eq("recipient_id", profile.id)
-    .eq("status", "pending")
-    .order("created_at", { ascending: false });
+  const { invites } = await getStudentNotifications();
 
   return (
     <div className="mx-auto max-w-4xl">

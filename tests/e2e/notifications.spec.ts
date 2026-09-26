@@ -47,4 +47,26 @@ test("student opens a pending invitation from the notification link", async ({ p
   await expect(page).toHaveURL(/\/student\/notifications$/);
   await expect(page.getByRole("heading", { name: className })).toBeVisible();
   await expect(page.getByRole("button", { name: "Tham gia" })).toBeVisible();
+
+  const nav = page.getByRole("navigation", { name: "Điều hướng chính" });
+  await expect.soft(nav.getByRole("link", { name: /Thông báo/ })).toHaveAttribute("aria-current", "page");
+  await expect.soft(nav.getByRole("link", { name: "Bài học" })).not.toHaveClass(/(^|\s)bg-surface-strong(\s|$)/);
+  let releaseNavigation!: () => void;
+  const navigationGate = new Promise<void>((resolve) => { releaseNavigation = resolve; });
+  await page.route("**/student?*", async (route) => {
+    await navigationGate;
+    await route.continue();
+  });
+  try {
+    await nav.getByRole("link", { name: "Bài học" }).click();
+    await expect.soft(nav.getByRole("status", { name: "Đang mở trang" })).toBeVisible({ timeout: 1000 });
+  } finally {
+    releaseNavigation();
+  }
+  await expect(page.getByRole("heading", { name: "Hôm nay học gì?" })).toBeVisible();
+  await expect.soft(nav.getByRole("link", { name: "Bài học" })).toHaveAttribute("aria-current", "page");
+  await expect.soft(nav.getByRole("link", { name: /Thông báo/ })).not.toHaveClass(/(^|\s)bg-surface-strong(\s|$)/);
+  await page.unroute("**/student?*");
+  await page.goBack();
+  await expect(nav.getByRole("link", { name: /Thông báo/ })).toHaveAttribute("aria-current", "page");
 });

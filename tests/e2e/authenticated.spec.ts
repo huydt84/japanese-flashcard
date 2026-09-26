@@ -17,6 +17,7 @@ let classId = "";
 let lessonId = "";
 let draftLessonId = "";
 let emptyLessonId = "";
+let cardIds: string[] = [];
 let draftCardIds: string[] = [];
 const longExample = "Tôi viết một lá thư rất dài. ".repeat(15).trim();
 
@@ -35,10 +36,12 @@ test.beforeAll(async () => {
   const { data: lesson, error: lessonError } = await admin.from("lessons").insert({ class_id: klass.id, title: "Động từ mỗi ngày", description: "18 từ cơ bản", status: "published", published_at: new Date().toISOString() }).select("id").single();
   if (lessonError || !lesson) throw lessonError ?? new Error("Không tạo được bài học kiểm thử");
   lessonId = lesson.id;
-  await admin.from("cards").insert([
+  const { data: cards, error: cardsError } = await admin.from("cards").insert([
     { lesson_id: lessonId, kanji: "学ぶ", hiragana: "まなぶ", meaning_vi: "học, học hỏi", example_ja: "毎日、日本語を学びます。", example_vi: "Tôi học tiếng Nhật mỗi ngày.", position: 0 },
     { lesson_id: lessonId, kanji: "食べる", hiragana: "たべる", meaning_vi: "ăn", example_ja: "朝ご飯を食べます。", example_vi: "Tôi ăn sáng.", position: 1 },
-  ]);
+  ]).select("id");
+  if (cardsError || !cards) throw cardsError ?? new Error("Không tạo được thẻ kiểm thử");
+  cardIds = cards.map((card) => card.id);
   const { data: draft, error: draftError } = await admin.from("lessons").insert({ class_id: classId, title: "Bản nháp để xem thử", status: "draft" }).select("id").single();
   if (draftError || !draft) throw draftError ?? new Error("Không tạo được bài nháp kiểm thử");
   draftLessonId = draft.id;
@@ -116,7 +119,18 @@ test("teacher, student and study surfaces render from authenticated data", async
   await expect(page.getByText("2 thẻ đến hạn", { exact: false })).toBeVisible();
   await page.screenshot({ path: `.impeccable/review/student${suffix}.png`, fullPage: true });
 
+  const admin = createClient(apiUrl, secretKey, { auth: { persistSession: false } });
+  const { error: progressError } = await admin.from("card_progress").insert([
+    { student_id: createdUsers[1], card_id: cardIds[0], due_at: "2000-01-01T00:00:00Z" },
+    { student_id: createdUsers[1], card_id: cardIds[1], due_at: "2100-01-01T00:00:00Z" },
+    { student_id: createdUsers[2], card_id: cardIds[0], due_at: "2100-01-01T00:00:00Z" },
+  ]);
+  if (progressError) throw progressError;
+  await page.reload();
+  await expect(page.getByRole("link", { name: /1 thẻ đến hạn.*2 thẻ tất cả/ })).toBeVisible();
+
   await page.goto(`/study/${lessonId}`);
+  await expect(page.getByText("1 / 1", { exact: true })).toBeVisible();
   await expect(page.getByText("学ぶ", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Lật thẻ để xem đáp án" }).click();
   await expect(page.getByRole("button", { name: /Đúng, phím 3/ })).toBeEnabled();
@@ -137,6 +151,9 @@ test("admin switches between the real student and teacher workspaces", async ({ 
 
   await page.getByRole("button", { name: "Học sinh" }).click();
   await expect(page).toHaveURL(/\/student$/);
+  await expect(page.getByRole("button", { name: "Học sinh" })).toHaveAttribute("aria-pressed", "true");
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Học sinh" })).toHaveAttribute("aria-pressed", "true");
 });
 
 test("teacher previews draft and published lessons without writing student progress", async ({ page }, testInfo) => {

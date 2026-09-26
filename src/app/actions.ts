@@ -52,9 +52,8 @@ export async function chooseRole(formData: FormData) {
 
 export async function switchAdminMode(mode: WorkspaceRole) {
   const selectedMode = roleSchema.parse(mode);
-  const { supabase, user } = await userOrThrow();
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "admin") throw new Error("Chỉ tài khoản admin mới có thể chuyển chế độ");
+  const supabase = await createClient();
+  // The RPC checks auth.uid() and the persisted admin role atomically with the update.
   const { error } = await supabase.rpc("set_admin_mode", { selected_mode: selectedMode });
   if (error) throw new Error("Không thể chuyển chế độ admin");
   redirect(selectedMode === "teacher" ? "/teacher" : "/student");

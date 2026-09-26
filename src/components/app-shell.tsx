@@ -1,19 +1,19 @@
-import Link from "next/link";
 import { Bell, Books, ChalkboardTeacher, SignOut, Student, Swap } from "@phosphor-icons/react/dist/ssr";
 import { signOut, switchAdminMode } from "@/app/actions";
 import { Brand } from "@/components/brand";
 import { PendingButton } from "@/components/pending-button";
+import { NavigationLink } from "@/components/navigation-link";
 import type { Profile, UserRole, WorkspaceRole } from "@/lib/types";
 
 export function AppShell({
   profile,
   workspaceRole,
-  unread = 0,
+  notificationBadge,
   children,
 }: {
   profile: Profile & { role: UserRole };
   workspaceRole: WorkspaceRole;
-  unread?: number;
+  notificationBadge?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const teacher = workspaceRole === "teacher";
@@ -39,11 +39,11 @@ export function AppShell({
         </div>
 
         <nav className="mt-4 flex gap-2 overflow-x-auto md:mt-10 md:block md:space-y-2" aria-label="Điều hướng chính">
-          <Link href={home} className="flex min-h-11 shrink-0 items-center gap-3 rounded-xl bg-surface-strong px-3 font-semibold">
+          <NavigationLink href={home} exact={!teacher}>
             {teacher ? <ChalkboardTeacher size={20} aria-hidden="true" /> : <Books size={20} aria-hidden="true" />}
             {teacher ? "Lớp học" : "Bài học"}
-          </Link>
-          {!teacher ? <Link href="/student/notifications" className="flex min-h-11 shrink-0 items-center gap-3 rounded-xl px-3 font-semibold hover:bg-surface-strong"><Bell size={20} aria-hidden="true" />Thông báo{unread > 0 ? <span className="grid min-w-5 place-items-center rounded-full bg-brand px-1.5 text-xs text-white" aria-label={`${unread} thông báo chưa đọc`}>{unread}</span> : null}</Link> : null}
+          </NavigationLink>
+          {!teacher ? <NavigationLink href="/student/notifications"><Bell size={20} aria-hidden="true" />Thông báo{notificationBadge}</NavigationLink> : null}
         </nav>
 
         {profile.role === "admin" ? (
