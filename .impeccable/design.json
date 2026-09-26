@@ -125,7 +125,7 @@
       "kind": "input",
       "refersTo": "field",
       "description": "The standard paper-like authoring field.",
-      "html": "<label class=\"ds-field-label\" for=\"ds-class-name\">Tên lớp</label><input class=\"ds-field\" id=\"ds-class-name\" placeholder=\"Tiếng Nhật cùng Mai\">",
+      "html": "<label class=\"ds-field-label\" for=\"ds-class-name\">Tên lớp</label><input class=\"ds-field\" id=\"ds-class-name\" placeholder=\"Tên lớp học\">",
       "css": ".ds-field-label { display:block; margin-bottom:.45rem; color:var(--ink,#1e252d); font:650 .86rem/1.25 Geist,sans-serif; } .ds-field { width:100%; border:1px solid var(--line,#d8dde2); border-radius:12px; background:var(--surface-strong,#fff); color:var(--ink,#1e252d); padding:.8rem .9rem; font:400 1rem/1.5 Geist,sans-serif; } .ds-field::placeholder { color:var(--muted,#596570); } .ds-field:hover { border-color:var(--muted,#596570); } .ds-field:focus { outline:none; border-color:var(--focus,#245e9b); box-shadow:0 0 0 3px color-mix(in srgb,var(--focus,#245e9b) 20%,transparent); }"
     },
     {

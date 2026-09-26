@@ -53,7 +53,7 @@ export default async function TeacherHome() {
           <ActionForm action={createClass} className="mt-6 space-y-5" submitClassName="button-primary w-full" submitLabel="Tạo lớp" pendingLabel="Đang tạo lớp">
             <div>
               <label className="label" htmlFor="name">Tên lớp</label>
-              <input className="field" id="name" name="name" required minLength={2} maxLength={80} placeholder="Tiếng Nhật cùng Mai" />
+              <input className="field" id="name" name="name" required minLength={2} maxLength={80} placeholder="Tên lớp học" />
             </div>
             <div>
               <label className="label" htmlFor="description">Mô tả</label>

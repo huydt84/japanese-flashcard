@@ -23,7 +23,7 @@ test.beforeAll(async () => {
     createdUsers.push(data.user.id);
     await admin.from("profiles").update({ role, active_mode: role === "admin" ? "student" : null, onboarding_completed_at: new Date().toISOString() }).eq("id", data.user.id);
   }
-  const { data: klass, error: classError } = await admin.from("classes").insert({ teacher_id: createdUsers[0], name: "Tiếng Nhật cùng Mai", description: "Từ vựng N5 dùng mỗi ngày" }).select("id").single();
+  const { data: klass, error: classError } = await admin.from("classes").insert({ teacher_id: createdUsers[0], name: "Tên lớp học", description: "Từ vựng N5 dùng mỗi ngày" }).select("id").single();
   if (classError || !klass) throw classError ?? new Error("Không tạo được lớp kiểm thử");
   classId = klass.id;
   await admin.from("class_memberships").insert({ class_id: klass.id, student_id: createdUsers[1] });
@@ -53,7 +53,7 @@ test("teacher, student and study surfaces render from authenticated data", async
   await login(page, teacherEmail);
   await page.goto("/teacher");
   await expect(page.getByRole("heading", { name: /Chào/ })).toBeVisible();
-  await expect(page.getByText("Tiếng Nhật cùng Mai", { exact: true })).toBeVisible();
+  await expect(page.getByText("Tên lớp học", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Đăng xuất" })).toBeVisible();
   await page.screenshot({ path: `.impeccable/review/teacher${suffix}.png`, fullPage: true });
 
