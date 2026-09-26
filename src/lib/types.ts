@@ -3,11 +3,12 @@ export type UserRole = WorkspaceRole | "admin";
 export type LessonStatus = "draft" | "published";
 export type InvitationStatus = "pending" | "accepted" | "declined" | "revoked";
 export type ReviewRating = "again" | "hard" | "good";
+export type StudyScope = "due" | ReviewRating | "all";
 export type StudyActivity = "flashcards" | "quiz";
 export type StudyDirection = "front-first" | "back-first";
 export type StudyConfiguration = {
   direction: StudyDirection;
-  scope: "due" | "all";
+  scope: StudyScope;
   count: number | "all";
   shuffle: boolean;
 };

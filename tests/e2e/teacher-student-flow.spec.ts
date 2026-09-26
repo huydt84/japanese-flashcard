@@ -164,13 +164,19 @@ for (const source of ["manual", "Excel"] as const) {
     await expect(student.getByRole("heading", { name: "Đã hoàn thành phiên học." })).toBeVisible();
     await student.getByRole("button", { name: "Quay lại bài học" }).click();
     await expect(student.getByRole("heading", { name: "Từ vựng trong bài" })).toBeVisible();
+    await student.getByLabel("Xem nhóm thẻ").selectOption(source === "Excel" ? "hard" : "again");
+    await expect(student.getByText(source === "Excel" ? "学ぶ" : "食べる", { exact: true })).toBeVisible();
+    await expect(student.getByText(source === "Excel" ? "食べる" : "学ぶ", { exact: true })).toHaveCount(0);
+    await student.getByRole("button", { name: "Trắc nghiệm" }).first().click();
+    await expect(student.getByLabel("Từ vựng để học")).toHaveValue(source === "Excel" ? "hard" : "again");
+    await student.getByRole("button", { name: "Hủy" }).click();
     await student.getByRole("link", { name: "Trở về lớp" }).click();
-    await expect.soft(student.getByRole("link", { name: new RegExp(lessonTitle) })).toContainText("Đã học xong hôm nay");
+    await expect.soft(student.getByRole("link", { name: new RegExp(lessonTitle) })).toContainText(source === "Excel" ? "Hiện chưa có thẻ đến hạn" : "1 thẻ đến hạn");
 
     await teacher.goto(classPath);
     const progress = teacher.getByRole("row").filter({ hasText: studentEmail });
     await expect(progress.getByRole("cell").nth(1)).toHaveText("2/2");
-    await expect(progress.getByRole("cell").nth(2)).toHaveText("0");
+    await expect(progress.getByRole("cell").nth(2)).toHaveText(source === "Excel" ? "0" : "1");
     await expect(progress.getByRole("cell").nth(3)).toHaveText("50%");
   });
 }

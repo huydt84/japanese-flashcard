@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type RefObject } from "react";
 import { ArrowRight, CaretDown, X } from "@phosphor-icons/react";
+import { studyScopes } from "@/lib/review-scope";
 import type { StudyActivity, StudyConfiguration } from "@/lib/types";
 
 type Props = {
@@ -10,6 +11,7 @@ type Props = {
   preview: boolean;
   available: number;
   scopeCount: number;
+  scopeCounts: Record<StudyConfiguration["scope"], number>;
   returnFocusTo: HTMLElement | null;
   fallbackFocus: RefObject<HTMLHeadingElement | null>;
   onChange: (config: StudyConfiguration) => void;
@@ -17,7 +19,7 @@ type Props = {
   onStart: () => void;
 };
 
-export function StudyConfigurationDialog({ activity, config, preview, available, scopeCount, returnFocusTo, fallbackFocus, onChange, onClose, onStart }: Props) {
+export function StudyConfigurationDialog({ activity, config, preview, available, scopeCount, scopeCounts, returnFocusTo, fallbackFocus, onChange, onClose, onStart }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const quiz = activity === "quiz";
   const valid = available > 0 && (config.count === "all" || (Number.isInteger(config.count) && config.count >= 1 && config.count <= available));
@@ -72,8 +74,7 @@ export function StudyConfigurationDialog({ activity, config, preview, available,
             <label className="label" htmlFor="study-config-scope">Từ vựng để học</label>
             <span className="relative block">
               <select id="study-config-scope" className="field study-direction min-h-11" value={config.scope} onChange={(event) => onChange({ ...config, scope: event.target.value as StudyConfiguration["scope"] })}>
-                <option value="due">Thẻ đến hạn và chưa học</option>
-                <option value="all">Tất cả từ vựng</option>
+                {studyScopes.map(({ value, label }) => <option key={value} value={value}>{label} ({scopeCounts[value]})</option>)}
               </select>
               <CaretDown size={16} weight="bold" aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
             </span>
@@ -99,7 +100,7 @@ export function StudyConfigurationDialog({ activity, config, preview, available,
           </p>
           {quiz && available < scopeCount && <p className="text-sm leading-relaxed text-muted">Đã bỏ qua từ trùng lặp hoặc có nhiều đáp án cho cùng một câu hỏi.</p>}
           {!available && <p role="status" className="text-sm font-semibold leading-relaxed text-muted">
-            {config.scope === "due" && !scopeCount ? "Chưa có thẻ đến hạn. Chọn tất cả từ vựng để tiếp tục luyện tập." : quiz ? "Cần ít nhất hai đáp án khác nhau và một câu hỏi không trùng nghĩa. Hãy đổi chiều học hoặc chọn thẻ ghi nhớ." : "Bài học chưa có từ vựng để bắt đầu."}
+            {!scopeCount ? "Nhóm này chưa có thẻ. Hãy chọn nhóm khác để tiếp tục." : quiz ? "Cần ít nhất hai đáp án khác nhau và một câu hỏi không trùng nghĩa. Hãy đổi chiều học hoặc chọn thẻ ghi nhớ." : "Bài học chưa có từ vựng để bắt đầu."}
           </p>}
         </div>
         <footer className="flex shrink-0 justify-end gap-3 border-t border-line p-6">

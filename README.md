@@ -1,15 +1,19 @@
 # Kotoba
 
-Kotoba là web app học từ vựng tiếng Nhật dành cho giáo viên và học sinh. Giáo viên tạo lớp, bài học và flashcard; học sinh nhận lời mời trong app và ôn bằng lịch FSRS cá nhân.
+Kotoba là web app học từ vựng tiếng Nhật dành cho giáo viên và học sinh. Giáo viên tạo lớp, bài học và flashcard; học sinh nhận lời mời trong app và ôn bằng lịch hẹn cá nhân.
 
 ## Công nghệ
 
 - Next.js 16 App Router, React 19, TypeScript và Tailwind CSS 4
 - Supabase Google OAuth, PostgreSQL, Row Level Security và Realtime-ready notifications
-- `ts-fsrs` cho spaced repetition
+- Lịch ôn cố định và lịch sử câu trả lời được lưu trong PostgreSQL
 - Vitest, Playwright và Vercel
 
 Node.js 20.9 trở lên và pnpm 11.25.0 được khuyến nghị. Phiên bản pnpm được cố định trong `packageManager` và `engines.pnpm` để giữ lockfile tương thích với Vercel CLI.
+
+## Lịch ôn
+
+Danh sách mặc định gồm thẻ chưa học và thẻ đã đến hạn. Học sinh có thể xem và luyện riêng nhóm Sai, Chưa chắc, Đúng hoặc tất cả thẻ; nhóm được xác định bởi câu trả lời gần nhất. Sai đến hạn ngay ở phiên kế tiếp, Chưa chắc sau 1 giờ. Bốn lần Đúng liên tiếp lần lượt hẹn sau 6 giờ, 1 ngày, 2 ngày, rồi đánh dấu đã thuộc và không có hạn. Sai hoặc Chưa chắc đặt lại chuỗi Đúng. Ôn thẻ ghi nhớ theo bất kỳ nhóm nào đều cập nhật lịch; trắc nghiệm không cập nhật lịch.
 
 ## Chạy local
 
@@ -141,7 +145,7 @@ Sau lần deploy đầu, cập nhật Site URL/Redirect URLs trong Supabase và 
 
 - `src/app/teacher`: lớp, bài học, card editor, invitation và tiến độ
 - `src/app/student`: lớp, notification và bài học đã xuất bản
-- `src/app/study`: phiên flashcard FSRS
+- `src/app/study`: danh sách từ vựng, phiên thẻ ghi nhớ và trắc nghiệm
 - `src/app/actions.ts`: mutations đã xác thực
 - `supabase/migrations`: schema, transaction functions và RLS
 - `PRODUCT.md`: product truth đã xác nhận

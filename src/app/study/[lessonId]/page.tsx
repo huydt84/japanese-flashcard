@@ -16,14 +16,20 @@ export default async function StudyPage({ params }: PageProps<"/study/[lessonId]
   if (cardsError) throw new Error("Không thể tải từ vựng.");
   const ids = (cards ?? []).map((card) => card.id);
   const { data: progress, error: progressError } = ids.length
-    ? await supabase.from("card_progress").select("card_id,due_at").eq("student_id", profile.id).in("card_id", ids)
+    ? await supabase.from("card_progress").select("card_id,due_at,last_rating").eq("student_id", profile.id).in("card_id", ids)
     : { data: [], error: null };
   if (progressError) throw new Error("Không thể tải lịch ôn.");
-  const dueDates = new Map((progress ?? []).map((item) => [item.card_id, new Date(item.due_at).getTime()]));
+  const progressById = new Map((progress ?? []).map((item) => [item.card_id, item]));
   const now = new Date().getTime();
-  const dueCardIds = ids.filter((id) => !dueDates.has(id) || dueDates.get(id)! <= now);
+  const dueCardIds = ids.filter((id) => {
+    const item = progressById.get(id);
+    return !item || (item.due_at !== null && new Date(item.due_at).getTime() <= now);
+  });
+  const nextDueAt = (progress ?? []).map((item) => item.due_at)
+    .filter((due): due is string => due !== null && new Date(due).getTime() > now)
+    .sort((left, right) => new Date(left).getTime() - new Date(right).getTime())[0] ?? null;
 
   return <main className="min-h-[100dvh] px-4 py-5 sm:px-7">
-    <LessonStudy key={lessonId} mode="study" lessonTitle={lesson.title} description={lesson.description} cards={cards ?? []} dueCardIds={dueCardIds} backHref="/student" />
+    <LessonStudy key={lessonId} mode="study" lessonTitle={lesson.title} description={lesson.description} cards={cards ?? []} dueCardIds={dueCardIds} reviewProgress={progress ?? []} nextDueAt={nextDueAt} backHref="/student" />
   </main>;
 }

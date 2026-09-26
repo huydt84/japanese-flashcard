@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowUpRight, Cards, ListChecks } from "@phosphor-icons/react";
 import { buildQuizQuestions, quizCandidates, selectSessionCards, type QuizQuestion } from "@/lib/lesson-study";
-import type { StudyActivity, StudyCard, StudyConfiguration } from "@/lib/types";
+import { studyScopes } from "@/lib/review-scope";
+import type { ReviewRating, StudyActivity, StudyCard, StudyConfiguration, StudyScope } from "@/lib/types";
 import { StudySession } from "./study-session";
 import { QuizSession } from "./quiz-session";
 import { StudyConfigurationDialog } from "./study-configuration-dialog";
@@ -17,6 +18,8 @@ type Props = {
   description: string | null;
   cards: StudyCard[];
   dueCardIds?: string[];
+  reviewProgress?: { card_id: string; due_at: string | null; last_rating: ReviewRating | null }[];
+  nextDueAt?: string | null;
   backHref: string;
 };
 
@@ -41,29 +44,50 @@ function ModePicker({ location, disabled, onChoose }: { location: "top" | "botto
   );
 }
 
-export function LessonStudy({ mode, lessonTitle, description, cards, dueCardIds = [], backHref }: Props) {
+export function LessonStudy({ mode, lessonTitle, description, cards, dueCardIds = [], reviewProgress = [], nextDueAt = null, backHref }: Props) {
   const router = useRouter();
   const preview = mode === "preview";
   const [view, setView] = useState<View>({ kind: "overview" });
   const [activity, setActivity] = useState<StudyActivity | null>(null);
   const [returnFocusTo, setReturnFocusTo] = useState<HTMLElement | null>(null);
+  const [scope, setScope] = useState<StudyScope>(preview ? "all" : "due");
   const [configs, setConfigs] = useState<Record<StudyActivity, StudyConfiguration>>({
     flashcards: { direction: "front-first", scope: preview ? "all" : "due", count: "all", shuffle: false },
-    quiz: { direction: "front-first", scope: "all", count: 10, shuffle: true },
+    quiz: { direction: "front-first", scope: preview ? "all" : "due", count: 10, shuffle: true },
   });
   const [refreshing, startRefresh] = useTransition();
   const titleRef = useRef<HTMLHeadingElement>(null);
   const restoreOverview = useRef(false);
   const scrollPosition = useRef(0);
   const due = useMemo(() => new Set(dueCardIds), [dueCardIds]);
+  const ratings = useMemo(() => new Map(reviewProgress.map((item) => [item.card_id, item.last_rating])), [reviewProgress]);
+
+  function inScope(card: StudyCard, selectedScope: StudyScope) {
+    return selectedScope === "all" || (selectedScope === "due" ? due.has(card.id) : ratings.get(card.id) === selectedScope);
+  }
+
+  const scopeCounts = Object.fromEntries(studyScopes.map(({ value }) => [value, cards.filter((card) => inScope(card, value)).length])) as Record<StudyScope, number>;
+  const visibleCards = preview ? cards : cards.filter((card) => inScope(card, scope));
+
+  useEffect(() => {
+    if (preview || view.kind !== "overview" || !nextDueAt) return;
+    const dueTime = new Date(nextDueAt).getTime();
+    if (!Number.isFinite(dueTime)) return;
+    const refresh = () => startRefresh(() => router.refresh());
+    const timer = window.setTimeout(refresh, Math.min(Math.max(dueTime - Date.now() + 50, 0), 2_147_000_000));
+    const onReturn = () => { if (document.visibilityState === "visible" && Date.now() >= dueTime) refresh(); };
+    document.addEventListener("visibilitychange", onReturn);
+    window.addEventListener("focus", onReturn);
+    return () => { window.clearTimeout(timer); document.removeEventListener("visibilitychange", onReturn); window.removeEventListener("focus", onReturn); };
+  }, [nextDueAt, preview, router, view.kind]);
 
   function candidates(selectedActivity: StudyActivity, config: StudyConfiguration) {
-    const allowed = !preview && config.scope === "due" ? due : undefined;
-    return selectedActivity === "quiz" ? quizCandidates(cards, config.direction, allowed) : cards.filter((card) => !allowed || allowed.has(card.id));
+    const allowedCards = preview ? cards : cards.filter((card) => inScope(card, config.scope));
+    return selectedActivity === "quiz" ? quizCandidates(cards, config.direction, new Set(allowedCards.map((card) => card.id))) : allowedCards;
   }
 
   function choose(nextActivity: StudyActivity, trigger?: HTMLButtonElement) {
-    const config = configs[nextActivity];
+    const config = { ...configs[nextActivity], scope };
     const available = candidates(nextActivity, config).length;
     setConfigs((previous) => ({ ...previous, [nextActivity]: { ...config, count: config.count === "all" ? "all" : Math.min(Math.max(1, config.count), Math.max(1, available)) } }));
     setActivity(nextActivity);
@@ -72,17 +96,18 @@ export function LessonStudy({ mode, lessonTitle, description, cards, dueCardIds 
 
   function updateConfig(config: StudyConfiguration) {
     if (!activity) return;
-    const previous = configs[activity];
+    const previous = { ...configs[activity], scope };
     if (config.direction !== previous.direction || config.scope !== previous.scope) {
       const available = candidates(activity, config).length;
       config = { ...config, count: config.count === "all" ? "all" : Math.min(Math.max(1, config.count), Math.max(1, available)) };
     }
+    setScope(config.scope);
     setConfigs((previous) => ({ ...previous, [activity]: config }));
   }
 
   function start() {
     if (!activity) return;
-    const config = configs[activity];
+    const config = { ...configs[activity], scope };
     const available = candidates(activity, config);
     if (!available.length || (config.count !== "all" && (!Number.isInteger(config.count) || config.count < 1 || config.count > available.length))) return;
     const selected = selectSessionCards(available, config);
@@ -109,9 +134,9 @@ export function LessonStudy({ mode, lessonTitle, description, cards, dueCardIds 
   if (view.kind === "flashcards") return <StudySession mode={mode} lessonTitle={lessonTitle} cards={view.cards} initialDirection={view.config.direction} onExit={returnToOverview} />;
   if (view.kind === "quiz") return <QuizSession lessonTitle={lessonTitle} questions={view.questions} direction={view.config.direction} preview={preview} onExit={returnToOverview} onConfigure={() => { returnToOverview(); choose("quiz"); }} />;
 
-  const config = activity ? configs[activity] : null;
+  const config = activity ? { ...configs[activity], scope } : null;
   const available = activity && config ? candidates(activity, config).length : 0;
-  const scopeCount = config?.scope === "due" && !preview ? cards.filter((card) => due.has(card.id)).length : cards.length;
+  const scopeCount = config ? scopeCounts[config.scope] : 0;
 
   return (
     <div className="mx-auto max-w-5xl pb-12">
@@ -128,13 +153,19 @@ export function LessonStudy({ mode, lessonTitle, description, cards, dueCardIds 
       {refreshing && <p role="status" className="mt-3 text-sm text-muted">Đang cập nhật lịch ôn…</p>}
       <section className="my-10" aria-labelledby="vocabulary-heading">
         <h2 id="vocabulary-heading" className="mb-5 text-xl font-bold">Từ vựng trong bài</h2>
-        {cards.length ? <ol className="divide-y divide-line border-y border-line">{cards.map((card) => <li key={card.id} className="py-6 sm:py-7"><VocabularyEntry card={card} /></li>)}</ol> : <div className="rounded-2xl bg-surface p-8 text-center">
+        {!preview && cards.length > 0 && <div className="mb-5 max-w-sm">
+          <label htmlFor="vocabulary-scope" className="label">Xem nhóm thẻ</label>
+          <select id="vocabulary-scope" className="field min-h-11" value={scope} onChange={(event) => setScope(event.target.value as StudyScope)}>
+            {studyScopes.map(({ value, label }) => <option key={value} value={value}>{label} ({scopeCounts[value]})</option>)}
+          </select>
+        </div>}
+        {visibleCards.length ? <ol className="divide-y divide-line border-y border-line">{visibleCards.map((card) => <li key={card.id} className="py-6 sm:py-7"><VocabularyEntry card={card} /></li>)}</ol> : cards.length > 0 ? <p className="rounded-2xl bg-surface p-8 text-muted">Nhóm này chưa có thẻ. Hãy chọn nhóm khác để xem và luyện tập.</p> : <div className="rounded-2xl bg-surface p-8 text-center">
           <h3 className="text-xl font-bold">Bài học chưa có từ vựng</h3>
           <p className="mt-3 text-muted">{preview ? "Quay lại chỉnh sửa để thêm thẻ đầu tiên." : "Giáo viên sẽ thêm từ vựng vào bài học này."}</p>
         </div>}
       </section>
       <ModePicker location="bottom" disabled={!cards.length || refreshing} onChoose={choose} />
-      {activity && config && <StudyConfigurationDialog activity={activity} config={config} preview={preview} available={available} scopeCount={scopeCount} returnFocusTo={returnFocusTo} fallbackFocus={titleRef} onChange={updateConfig} onClose={() => setActivity(null)} onStart={start} />}
+      {activity && config && <StudyConfigurationDialog activity={activity} config={config} preview={preview} available={available} scopeCount={scopeCount} scopeCounts={scopeCounts} returnFocusTo={returnFocusTo} fallbackFocus={titleRef} onChange={updateConfig} onClose={() => setActivity(null)} onStart={start} />}
     </div>
   );
 }

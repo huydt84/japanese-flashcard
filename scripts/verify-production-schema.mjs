@@ -23,7 +23,9 @@ const checks = {
   "admin workspace": schema.includes('CREATE OR REPLACE FUNCTION "public"."set_admin_mode"'),
   "card reordering": schema.includes('CREATE OR REPLACE FUNCTION "public"."move_card"'),
   "invited class visibility": schema.includes('CREATE POLICY "students read invited classes"'),
+  "fixed review schedule": schema.includes('CREATE OR REPLACE FUNCTION "public"."record_review_v2"')
+    && schema.includes('"good_streak" smallint') && schema.includes('"last_rating" "public"."review_rating"'),
 };
 
 for (const [name, present] of Object.entries(checks)) console.log(`${name}: ${present ? "present" : "missing"}`);
-if (!checks["initial schema"] || !checks["admin workspace"] || !checks["card reordering"]) process.exitCode = 1;
+if (!checks["initial schema"] || !checks["admin workspace"] || !checks["card reordering"] || !checks["fixed review schedule"]) process.exitCode = 1;

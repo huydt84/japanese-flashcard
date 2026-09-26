@@ -6,7 +6,6 @@ import { ZodError } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { cardSchema, classSchema, inviteSchema, lessonSchema, roleSchema, uuidSchema } from "@/lib/validation";
 import { parseCardXlsx } from "@/lib/xlsx";
-import { nextReview } from "@/lib/fsrs";
 import { resolveWorkspaceRole } from "@/lib/roles";
 import type { ActionState } from "@/lib/action-state";
 import type { Profile, ReviewRating, WorkspaceRole } from "@/lib/types";
@@ -235,14 +234,10 @@ export async function respondInvitation(invitationId: string, accept: boolean, p
 
 export async function submitReview(cardId: string, sessionId: string, rating: ReviewRating) {
   const { supabase } = await userOrThrow();
-  const { data: progress } = await supabase.from("card_progress").select("fsrs").eq("card_id", cardId).maybeSingle();
-  const before = (progress?.fsrs as Record<string, unknown> | null) ?? {};
-  const review = nextReview(Object.keys(before).length ? before : null, rating);
-  const after = JSON.parse(JSON.stringify(review.card));
-  const { error } = await supabase.rpc("record_review", { target_card: cardId, target_session: sessionId, selected_rating: rating, previous_state: before, next_state: after, reviewed_time: new Date().toISOString() });
+  const { error } = await supabase.rpc("record_review_v2", { target_card: cardId, target_session: sessionId, selected_rating: rating });
   if (error) throw new Error(error.message);
   revalidatePath("/student");
-  return { due: review.card.due.toISOString() };
+  return { saved: true };
 }
 
 export async function undoReview(sessionId: string) {

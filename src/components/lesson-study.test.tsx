@@ -12,7 +12,7 @@ beforeAll(() => {
   HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
   window.scrollTo = vi.fn();
 });
-afterEach(() => { cleanup(); vi.resetAllMocks(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.resetAllMocks(); });
 
 const cards = [
   { id: "one", kanji: "学ぶ", hiragana: "まなぶ", meaning_vi: "học", example_ja: "日本語を学びます。", example_vi: "Tôi học tiếng Nhật." },
@@ -23,7 +23,10 @@ const props = { mode: "study" as const, lessonTitle: "Buổi 1", description: "�
 it("shows every word, shares settings between both mode selectors, and starts only after confirmation", () => {
   render(<LessonStudy {...props} />);
   expect(screen.getByText("学ぶ")).toBeInTheDocument();
+  expect(screen.queryByText("食べる")).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Xem nhóm thẻ"), { target: { value: "all" } });
   expect(screen.getByText("食べる")).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Xem nhóm thẻ"), { target: { value: "due" } });
   expect(screen.queryByRole("button", { name: "Lật thẻ để xem đáp án" })).not.toBeInTheDocument();
   fireEvent.click(screen.getAllByRole("button", { name: "Thẻ ghi nhớ" })[1]);
   fireEvent.change(screen.getByLabelText("Chiều học"), { target: { value: "back-first" } });
@@ -35,7 +38,7 @@ it("shows every word, shares settings between both mode selectors, and starts on
   expect(screen.getByText("1 / 1")).toBeInTheDocument();
   expect(screen.getByRole("group", { name: "Mặt sau" })).toHaveTextContent("まなぶ");
   fireEvent.click(screen.getByRole("button", { name: "Quay lại bài học" }));
-  expect(screen.getByText("食べる")).toBeInTheDocument();
+  expect(screen.getByText("学ぶ")).toBeInTheDocument();
   expect(refresh).toHaveBeenCalledOnce();
   expect(submitReview).not.toHaveBeenCalled();
 });
@@ -67,8 +70,38 @@ it("allows practice with all cards when nothing is due and validates custom coun
   expect(screen.getByText("1 / 1")).toBeInTheDocument();
 });
 
+it("filters the vocabulary list by latest rating and carries the group into both modes", () => {
+  render(<LessonStudy {...props} reviewProgress={[
+    { card_id: "one", due_at: "2020-01-01", last_rating: "hard" },
+    { card_id: "two", due_at: null, last_rating: "good" },
+  ]} />);
+  const listScope = screen.getByLabelText("Xem nhóm thẻ");
+  expect(listScope).toHaveValue("due");
+  expect(screen.getByText("学ぶ")).toBeInTheDocument();
+  expect(screen.queryByText("食べる")).not.toBeInTheDocument();
+  fireEvent.change(listScope, { target: { value: "good" } });
+  expect(screen.queryByText("学ぶ")).not.toBeInTheDocument();
+  expect(screen.getByText("食べる")).toBeInTheDocument();
+  fireEvent.click(screen.getAllByRole("button", { name: "Thẻ ghi nhớ" })[0]);
+  expect(screen.getByLabelText("Từ vựng để học")).toHaveValue("good");
+  expect(screen.getByText("1 thẻ có thể học.")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Hủy" }));
+  fireEvent.click(screen.getAllByRole("button", { name: "Trắc nghiệm" })[0]);
+  expect(screen.getByLabelText("Từ vựng để học")).toHaveValue("good");
+});
+
+it("refreshes the overview when the next card becomes due", () => {
+  vi.useFakeTimers();
+  const nextDueAt = new Date(Date.now() + 1_000).toISOString();
+  render(<LessonStudy {...props} nextDueAt={nextDueAt} />);
+  expect(refresh).not.toHaveBeenCalled();
+  act(() => vi.advanceTimersByTime(1_100));
+  expect(refresh).toHaveBeenCalledOnce();
+});
+
 it.each(["study", "preview"] as const)("scores and locks quiz answers in %s without saving reviews", async (mode) => {
   render(<LessonStudy {...props} mode={mode} />);
+  if (mode === "study") fireEvent.change(screen.getByLabelText("Xem nhóm thẻ"), { target: { value: "all" } });
   fireEvent.click(screen.getAllByRole("button", { name: "Trắc nghiệm" })[0]);
   if (mode === "preview") expect(screen.queryByLabelText("Từ vựng để học")).not.toBeInTheDocument();
   fireEvent.click(screen.getByLabelText("Tráo thứ tự câu hỏi"));

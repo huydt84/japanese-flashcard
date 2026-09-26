@@ -132,7 +132,10 @@ test("teacher, student and study surfaces render from authenticated data", async
 
   await page.goto(`/study/${lessonId}`);
   await expect(page.getByRole("heading", { name: "Từ vựng trong bài" })).toBeVisible();
+  await expect(page.getByText("食べる", { exact: true })).toHaveCount(0);
+  await page.getByLabel("Xem nhóm thẻ").selectOption("all");
   await expect(page.getByText("食べる", { exact: true })).toBeVisible();
+  await page.getByLabel("Xem nhóm thẻ").selectOption("due");
   await startFlashcards(page);
   await expect(page.getByText("1 / 1", { exact: true })).toBeVisible();
   await expect(page.getByText("学ぶ", { exact: true })).toBeVisible();
@@ -287,6 +290,28 @@ test("vocabulary, centered setup and scored practice work in both themes without
     await expect(page.getByRole("heading", { name: "Từ vựng trong bài" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Lật thẻ để xem đáp án" })).toHaveCount(0);
     await expect(page.getByText("学ぶ", { exact: true })).toBeVisible();
+    if (testInfo.project.name === "desktop" && theme === "light") {
+      const originalViewport = page.viewportSize();
+      for (const [width, height] of [[320, 760], [1440, 900], [1920, 1080]] as const) {
+        await page.setViewportSize({ width, height });
+        const scope = page.getByLabel("Xem nhóm thẻ");
+        await expect(scope).toBeVisible();
+        const box = await scope.boundingBox();
+        expect(box && box.x >= 0 && box.x + box.width <= width).toBe(true);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        await page.screenshot({ path: `.impeccable/review/schedule-due-${width}.png`, fullPage: true });
+        await scope.selectOption("all");
+        await expect(page.getByText("食べる", { exact: true })).toBeVisible();
+        await page.screenshot({ path: `.impeccable/review/schedule-all-${width}.png`, fullPage: true });
+        await page.getByRole("button", { name: "Thẻ ghi nhớ" }).first().click();
+        await expect(page.getByRole("dialog", { name: "Thẻ ghi nhớ" })).toBeVisible();
+        await page.screenshot({ path: `.impeccable/review/schedule-setup-${width}.png`, fullPage: true });
+        await page.getByRole("button", { name: "Hủy" }).click();
+        await scope.selectOption("due");
+      }
+      if (originalViewport) await page.setViewportSize(originalViewport);
+    }
+    await page.getByLabel("Xem nhóm thẻ").selectOption("all");
     await expect(page.getByText("食べる", { exact: true })).toBeVisible();
     const screenshot = (name: string) => page.screenshot({ path: `.impeccable/review/lesson-flow/${testInfo.project.name}-${theme}-${name}.png`, fullPage: true });
     await screenshot("overview");
@@ -351,4 +376,20 @@ test("vocabulary, centered setup and scored practice work in both themes without
   await login(page, studentEmail);
   await page.goto(`/study/${draftLessonId}`);
   await expect(page.getByRole("heading", { name: "Không tìm thấy trang" })).toBeVisible();
+});
+
+test("an open lesson updates its due list when a scheduled card becomes due", async ({ page }) => {
+  const admin = createClient(apiUrl, secretKey, { auth: { persistSession: false } });
+  const dueAt = new Date(Date.now() + 10_000).toISOString();
+  const { error } = await admin.from("card_progress").upsert([
+    { student_id: createdUsers[1], card_id: cardIds[0], due_at: "2000-01-01T00:00:00Z", last_rating: "again" },
+    { student_id: createdUsers[1], card_id: cardIds[1], due_at: dueAt, last_rating: "hard" },
+  ], { onConflict: "student_id,card_id" });
+  if (error) throw error;
+  await login(page, studentEmail);
+  await page.goto(`/study/${lessonId}`);
+  await expect(page.getByText("1 thẻ đến hạn hoặc chưa học")).toBeVisible();
+  await expect(page.getByText("食べる", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("2 thẻ đến hạn hoặc chưa học")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("食べる", { exact: true })).toBeVisible();
 });

@@ -1,7 +1,6 @@
 // @vitest-environment node
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { nextReview } from "@/lib/fsrs";
 
 const run = process.env.RUN_SUPABASE_INTEGRATION === "1" ? describe : describe.skip;
 const apiUrl = process.env.TEST_SUPABASE_URL ?? "";
@@ -73,13 +72,42 @@ run("authenticated teacher-to-student flow and RLS", () => {
     expect((await student.rpc("accept_class_invitation", { target_invitation: invitation.id, accept_invitation: true })).error).toBeNull();
     expect((await student.from("cards").select("id").eq("id", cardId).single()).data?.id).toBe(cardId);
 
-    const next = nextReview(null, "good", new Date("2026-09-16T08:00:00.000Z"));
     const sessionId = crypto.randomUUID();
-    expect((await student.rpc("record_review", { target_card: cardId, target_session: sessionId, selected_rating: "good", previous_state: {}, next_state: JSON.parse(JSON.stringify(next.card)), reviewed_time: "2026-09-16T08:00:00.000Z" })).error).toBeNull();
+    // An older open page can still call the original RPC after the migration.
+    expect((await student.rpc("record_review", { target_card: cardId, target_session: sessionId, selected_rating: "good", previous_state: {}, next_state: {}, reviewed_time: "2026-09-16T08:00:00.000Z" })).error).toBeNull();
     expect((await student.from("card_progress").select("card_id").eq("card_id", cardId).single()).data?.card_id).toBe(cardId);
     expect((await student.rpc("undo_latest_review", { target_session: sessionId })).error).toBeNull();
     expect((await student.from("card_progress").select("card_id").eq("card_id", cardId)).data).toEqual([]);
     expect((await student.from("review_logs").select("undone_at").eq("card_id", cardId).single()).data?.undone_at).toBeTruthy();
+
+    const rate = async (rating: "again" | "hard" | "good") => {
+      const result = await student.rpc("record_review_v2", { target_card: cardId, target_session: sessionId, selected_rating: rating });
+      expect(result.error).toBeNull();
+      const progress = await student.from("card_progress").select("due_at,last_review_at,last_rating,good_streak,review_count").eq("card_id", cardId).single();
+      expect(progress.error).toBeNull();
+      return progress.data!;
+    };
+    const hours = (progress: { due_at: string | null; last_review_at: string | null }) =>
+      (new Date(progress.due_at!).getTime() - new Date(progress.last_review_at!).getTime()) / 3_600_000;
+    const first = await rate("good");
+    expect(first.good_streak).toBe(1);
+    expect(hours(first)).toBe(6);
+    expect(hours(await rate("good"))).toBe(24);
+    expect(hours(await rate("good"))).toBe(48);
+    const mastered = await rate("good");
+    expect(mastered).toMatchObject({ good_streak: 4, last_rating: "good", due_at: null });
+    expect((await rate("good")).due_at).toBeNull();
+    const uncertain = await rate("hard");
+    expect(uncertain.good_streak).toBe(0);
+    expect(hours(uncertain)).toBe(1);
+    expect(hours(await rate("good"))).toBe(6);
+    const wrong = await rate("again");
+    expect(wrong.good_streak).toBe(0);
+    expect(wrong.due_at).toBe(wrong.last_review_at);
+    expect((await student.rpc("undo_latest_review", { target_session: sessionId })).error).toBeNull();
+    const restored = await student.from("card_progress").select("good_streak,last_rating,due_at,last_review_at").eq("card_id", cardId).single();
+    expect(restored.data).toMatchObject({ good_streak: 1, last_rating: "good" });
+    expect(hours(restored.data!)).toBe(6);
   });
 
   it("keeps the selected role immutable", async () => {
