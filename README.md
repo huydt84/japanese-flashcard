@@ -106,6 +106,8 @@ pnpm run deploy:prod
 
 `deploy:prod` đọc `.env`, kiểm tra toàn bộ contract, áp dụng migration production, đồng bộ duy nhất các dòng public được đánh dấu `@vercel` trong `.env.template` lên Vercel Production và Preview, rồi mới deploy. Lệnh sẽ dừng ngay nếu thiếu credential, project ref không khớp URL, migration lỗi hoặc URL production trỏ vào localhost. Các biến được đánh dấu `@supabase-cli` không bao giờ được gửi lên Vercel. Personal access token nên có hạn dùng và phải được xoay trong `.env` trước khi hết hạn.
 
+`vercel.json` đặt Functions tại Tokyo (`hnd1`), cùng vùng với Supabase production (`ap-northeast-1`). Giữ máy chủ ứng dụng gần database để các thao tác học, mời và chuyển vai trò không phải thực hiện nhiều lượt gọi xuyên Thái Bình Dương. Nếu chuyển vùng database, cập nhật cấu hình này và deploy lại.
+
 `.vercelignore` loại bỏ `.env`, cache build local (`.next`, `.next-*`), báo cáo kiểm thử và trạng thái Supabase CLI khỏi gói upload. Vercel CLI không dùng `.gitignore` để loại bỏ các tệp này. Không bỏ qua `pnpm-lock.yaml`: Vercel cần lockfile để nhận diện package manager và cài đúng dependency. Giữ pnpm 11.25.0 khi dùng Vercel CLI 58.4.4; lockfile nhiều YAML document của pnpm 12 khiến CLI này báo lỗi parse và nhận diện sai package manager.
 
 Để xem trước các tệp sẽ upload mà không deploy hoặc thay đổi database/environment:

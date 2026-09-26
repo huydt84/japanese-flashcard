@@ -1,10 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { StudySession } from "./study-session";
 
 const { submitReview, undoReview } = vi.hoisted(() => ({ submitReview: vi.fn(), undoReview: vi.fn() }));
 
 vi.mock("@/app/actions", () => ({ submitReview, undoReview }));
+afterEach(() => { cleanup(); vi.resetAllMocks(); });
 
 const cards = [
   { id: "one", kanji: "学ぶ", hiragana: "まなぶ", meaning_vi: "học", example_ja: "日本語を学びます。", example_vi: "Tôi học tiếng Nhật." },
@@ -38,4 +39,18 @@ describe("teacher flashcard preview", () => {
     expect(submitReview).not.toHaveBeenCalled();
     expect(undoReview).not.toHaveBeenCalled();
   });
+});
+
+it("lets a student undo the final answer, including retrying a failed undo", async () => {
+  submitReview.mockResolvedValue({ due: "2030-01-01" });
+  undoReview.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce({ cardId: "one" });
+  render(<StudySession mode="study" lessonTitle="Buổi 1" cards={[cards[0]]} backHref="/student" />);
+  fireEvent.click(screen.getByRole("button", { name: "Lật thẻ để xem đáp án" }));
+  fireEvent.click(screen.getByRole("button", { name: /Đúng, phím 3/ }));
+  await screen.findByRole("heading", { name: "Đã học xong hôm nay." });
+  fireEvent.click(screen.getByRole("button", { name: "Hoàn tác thẻ cuối" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Không thể hoàn tác");
+  fireEvent.click(screen.getByRole("button", { name: "Hoàn tác thẻ cuối" }));
+  expect(await screen.findByText("まなぶ")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Đúng, phím 3/ })).toBeEnabled();
 });

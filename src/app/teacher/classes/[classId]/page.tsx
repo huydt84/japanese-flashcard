@@ -6,6 +6,8 @@ import { ActionForm } from "@/components/action-form";
 import { EmptyState } from "@/components/empty-state";
 import { requireProfile } from "@/lib/auth";
 
+type StudentProgress = { student_id: string; studied: number; total: number; due: number; good_reviews: number; review_count: number; last_review: string | null };
+
 export default async function ClassPage({ params }: PageProps<"/teacher/classes/[classId]">) {
   const { classId } = await params;
   const { supabase } = await requireProfile("teacher");
@@ -17,18 +19,11 @@ export default async function ClassPage({ params }: PageProps<"/teacher/classes/
   ]);
   if (!klass) notFound();
 
-  const lessonIds = lessons?.map((lesson) => lesson.id) ?? [];
-  const { data: cards } = lessonIds.length ? await supabase.from("cards").select("id,lesson_id").in("lesson_id", lessonIds) : { data: [] };
-  const cardIds = cards?.map((card) => card.id) ?? [];
-  const [{ data: progress }, { data: logs }] = cardIds.length
-    ? await Promise.all([
-        supabase.from("card_progress").select("student_id,card_id,due_at").in("card_id", cardIds),
-        supabase.from("review_logs").select("student_id,card_id,rating,reviewed_at,undone_at").in("card_id", cardIds).is("undone_at", null),
-      ])
-    : [{ data: [] }, { data: [] }];
-  // Server Component progress is evaluated once for the current request.
-  // eslint-disable-next-line react-hooks/purity
-  const now = Date.now();
+  const { data: progress, error: progressError } = members?.length
+    ? await supabase.rpc("class_student_progress", { target_class: classId })
+    : { data: [], error: null };
+  if (progressError) throw new Error("Không thể tải tiến độ học viên.");
+  const progressByStudent = new Map((progress as StudentProgress[] ?? []).map((item) => [item.student_id, item]));
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -73,12 +68,9 @@ export default async function ClassPage({ params }: PageProps<"/teacher/classes/
                 <thead className="text-xs font-bold text-muted"><tr><th className="py-3 pr-4">Học viên</th><th className="px-3 py-3">Đã học</th><th className="px-3 py-3">Đến hạn</th><th className="px-3 py-3">Tỷ lệ đúng</th><th className="py-3 pl-3">Lần gần nhất</th></tr></thead>
                 <tbody className="divide-y divide-line">
                   {members?.map((member) => {
-                    const ownProgress = progress?.filter((item) => item.student_id === member.student_id) ?? [];
-                    const ownLogs = logs?.filter((item) => item.student_id === member.student_id) ?? [];
-                    const good = ownLogs.filter((item) => item.rating === "good").length;
-                    const latest = ownLogs.toSorted((a, b) => b.reviewed_at.localeCompare(a.reviewed_at))[0];
+                    const stats = progressByStudent.get(member.student_id);
                     const studentProfile = member.profiles as unknown as { display_name: string | null; email: string };
-                    return <tr key={member.student_id}><td className="py-4 pr-4"><p className="font-bold">{studentProfile.display_name || "Học viên"}</p><p className="text-sm text-muted">{studentProfile.email}</p></td><td className="px-3 py-4 font-semibold tabular-nums">{ownProgress.length}/{cardIds.length}</td><td className="px-3 py-4 font-semibold tabular-nums">{ownProgress.filter((item) => new Date(item.due_at).getTime() <= now).length}</td><td className="px-3 py-4 font-semibold tabular-nums">{ownLogs.length ? `${Math.round((good / ownLogs.length) * 100)}%` : "—"}</td><td className="py-4 pl-3 text-sm text-muted">{latest ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium" }).format(new Date(latest.reviewed_at)) : "Chưa học"}</td></tr>;
+                    return <tr key={member.student_id}><td className="py-4 pr-4"><p className="font-bold">{studentProfile.display_name || "Học viên"}</p><p className="text-sm text-muted">{studentProfile.email}</p></td><td className="px-3 py-4 font-semibold tabular-nums">{stats?.studied ?? 0}/{stats?.total ?? 0}</td><td className="px-3 py-4 font-semibold tabular-nums">{stats?.due ?? 0}</td><td className="px-3 py-4 font-semibold tabular-nums">{stats?.review_count ? `${Math.round((stats.good_reviews / stats.review_count) * 100)}%` : "—"}</td><td className="py-4 pl-3 text-sm text-muted">{stats?.last_review ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium" }).format(new Date(stats.last_review)) : "Chưa học"}</td></tr>;
                   })}
                   {!members?.length && <tr><td colSpan={5} className="py-8 text-center text-muted">Chưa có học viên tham gia.</td></tr>}
                 </tbody>

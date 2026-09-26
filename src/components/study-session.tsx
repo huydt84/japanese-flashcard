@@ -109,13 +109,12 @@ export function StudySession({ mode, lessonTitle, cards, backHref }: StudySessio
         <p className="mt-3 max-w-md text-lg leading-relaxed text-muted">
           {mode === "preview" ? "Bạn có thể xem lại từ đầu hoặc quay lại chỉnh sửa bài học." : "Kotoba đã lên lịch lần gặp tiếp theo cho từng thẻ dựa trên câu trả lời của bạn."}
         </p>
-        {mode === "preview" ? (
-          <div className="mt-8 flex flex-wrap justify-center gap-3">
-            {last ? <button type="button" onClick={undo} className="button-secondary">Hoàn tác thẻ cuối</button> : null}
-            <button type="button" onClick={restart} className="button-primary">Xem lại từ đầu</button>
-            <Link href={backHref} className="button-secondary">Quay lại bài học</Link>
-          </div>
-        ) : <Link href={backHref} className="button-primary mt-8">Trở về lớp</Link>}
+        {error && <p role="alert" className="mt-4 text-sm font-semibold text-wrong">{error}</p>}
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
+          {last ? <button type="button" onClick={undo} disabled={pending} className="button-secondary">Hoàn tác thẻ cuối</button> : null}
+          {mode === "preview" ? <button type="button" onClick={restart} className="button-primary">Xem lại từ đầu</button> : null}
+          <Link href={backHref} className={mode === "preview" ? "button-secondary" : "button-primary"}>{mode === "preview" ? "Quay lại bài học" : "Trở về lớp"}</Link>
+        </div>
       </div>
     );
   }

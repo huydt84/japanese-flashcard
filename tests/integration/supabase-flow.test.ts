@@ -66,7 +66,8 @@ run("authenticated teacher-to-student flow and RLS", () => {
     expect(reordered.data?.map((item) => item.id)).toEqual([secondCard.id, card.id]);
     expect((await outsider.rpc("move_card", { target_card: card.id, movement: "up" })).error).toBeTruthy();
     expect((await teacher.from("lessons").update({ status: "published", published_at: new Date().toISOString() }).eq("id", lesson.id)).error).toBeNull();
-    const { data: invitation, error: invitationError } = await teacher.from("class_invitations").insert({ class_id: classId, invited_by: teacherId, email: studentEmail }).select("id").single();
+    const { data: invitationId, error: invitationError } = await teacher.rpc("send_class_invitation", { target_class: classId, recipient_email: studentEmail });
+    const invitation = invitationId ? { id: invitationId } : null;
     if (invitationError || !invitation) throw invitationError ?? new Error("Không tạo được lời mời kiểm thử");
     expect((await student.rpc("claim_pending_invitations")).error).toBeNull();
     expect((await student.rpc("accept_class_invitation", { target_invitation: invitation.id, accept_invitation: true })).error).toBeNull();
@@ -87,6 +88,37 @@ run("authenticated teacher-to-student flow and RLS", () => {
     expect((await student.rpc("set_admin_mode", { selected_mode: "teacher" })).error).toBeTruthy();
     expect((await teacher.from("profiles").update({ role: "student" }).eq("id", userIds[0]).select("role")).data).toEqual([]);
     expect((await teacher.from("profiles").select("role").eq("id", userIds[0]).single()).data?.role).toBe("teacher");
+  });
+
+  it("summarizes published cards and more than 1000 reviews without truncation or draft leakage", async () => {
+    const { data: klass, error } = await teacher.from("classes").insert({ teacher_id: userIds[0], name: "Large review history" }).select("id").single();
+    if (error || !klass) throw error;
+    const { data: lessons, error: lessonError } = await teacher.from("lessons").insert([
+      { class_id: klass.id, title: "Published", status: "published" }, { class_id: klass.id, title: "Draft", status: "draft" },
+    ]).select("id,status");
+    if (lessonError || !lessons) throw lessonError;
+    const published = lessons.find((lesson) => lesson.status === "published")!;
+    const draft = lessons.find((lesson) => lesson.status === "draft")!;
+    const { data: cards, error: cardsError } = await teacher.from("cards").insert([published.id, published.id, draft.id].map((lesson_id, position) => ({ lesson_id, position, kanji: "学ぶ", hiragana: "まなぶ", meaning_vi: "học", example_ja: "学びます。", example_vi: "Tôi học." }))).select("id,lesson_id");
+    if (cardsError || !cards) throw cardsError;
+    const card = cards.find((card) => card.lesson_id === published.id)!;
+    expect((await admin.from("class_memberships").insert({ class_id: klass.id, student_id: userIds[1] })).error).toBeNull();
+    expect((await admin.from("card_progress").insert({ student_id: userIds[1], card_id: card.id, due_at: "2100-01-01" })).error).toBeNull();
+    expect((await admin.from("review_logs").insert(Array.from({ length: 1003 }, (_, index) => ({ student_id: userIds[1], card_id: card.id, session_id: crypto.randomUUID(), rating: index === 1001 ? "hard" : "good", state_before: {}, state_after: {}, reviewed_at: "2026-09-01T00:00:00Z", undone_at: index === 1002 ? "2026-09-02T00:00:00Z" : null })))).error).toBeNull();
+    const summary = await teacher.rpc("class_student_progress", { target_class: klass.id });
+    expect(summary.error).toBeNull();
+    expect(summary.data).toEqual([expect.objectContaining({ studied: 1, total: 2, due: 1, good_reviews: 1001, review_count: 1002 })]);
+    expect((await outsider.rpc("class_student_progress", { target_class: klass.id })).error).toBeTruthy();
+    expect((await outsider.rpc("send_class_invitation", { target_class: klass.id, recipient_email: outsiderEmail })).error).toBeTruthy();
+  });
+
+  it("rejects accepting an unclaimed invitation intended for someone else", async () => {
+    const { data: klass, error } = await teacher.from("classes").insert({ teacher_id: userIds[0], name: "Private invitation" }).select("id").single();
+    if (error || !klass) throw error;
+    const { data: invitation, error: inviteError } = await teacher.from("class_invitations").insert({ class_id: klass.id, invited_by: userIds[0], email: "someone-else@example.test" }).select("id").single();
+    if (inviteError || !invitation) throw inviteError;
+    expect((await student.rpc("accept_class_invitation", { target_invitation: invitation.id, accept_invitation: true })).error).toBeTruthy();
+    expect((await admin.from("class_memberships").select("student_id").eq("class_id", klass.id)).data).toEqual([]);
   });
 
   it("lets an admin switch between isolated student and teacher modes", async () => {

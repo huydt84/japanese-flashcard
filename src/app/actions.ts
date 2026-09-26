@@ -23,9 +23,9 @@ function failure(previous: ActionState, error: unknown, fallback: string): Actio
 
 async function userOrThrow() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Bạn cần đăng nhập");
-  return { supabase, user };
+  const { data, error } = await supabase.auth.getClaims();
+  if (error || !data?.claims.sub) throw new Error("Bạn cần đăng nhập");
+  return { supabase, user: { id: data.claims.sub } };
 }
 
 async function userForRole(requiredRole: WorkspaceRole) {
@@ -197,18 +197,11 @@ export async function publishLesson(lessonId: string, classId: string, previous:
 export async function inviteStudent(classId: string, previous: ActionState, formData: FormData): Promise<ActionState> {
   try {
     const { email } = inviteSchema.parse({ email: formData.get("email") });
-    const { supabase, user } = await userForRole("teacher");
-    const { data: profile } = await supabase.from("profiles").select("id,role").eq("email", email).maybeSingle();
-    if (profile?.role === "teacher") throw new Error("Email này thuộc tài khoản giáo viên.");
-    const { data: invite, error } = await supabase.from("class_invitations").insert({ class_id: classId, invited_by: user.id, email, recipient_id: profile?.id ?? null }).select("id").single();
-    if (error) throw new Error(error.code === "23505" ? "Email này đã có lời mời đang chờ." : "Không thể gửi lời mời. Hãy thử lại.");
-    if (profile?.id) {
-      const { error: notificationError } = await supabase.from("notifications").insert({ user_id: profile.id, kind: "class_invitation", invitation_id: invite.id });
-      if (notificationError) {
-        await supabase.from("class_invitations").delete().eq("id", invite.id);
-        throw new Error("Không thể gửi thông báo. Hãy thử lại.");
-      }
-    }
+    uuidSchema.parse(classId);
+    const supabase = await createClient();
+    // Ownership, recipient lookup and notification delivery are one authorized transaction.
+    const { error } = await supabase.rpc("send_class_invitation", { target_class: classId, recipient_email: email });
+    if (error) throw new Error(error.code === "23505" ? "Email này đã có lời mời đang chờ." : error.message === "teacher_recipient" ? "Email này thuộc tài khoản giáo viên." : "Không thể gửi lời mời. Hãy thử lại.");
     revalidatePath(`/teacher/classes/${classId}`);
     return result(previous, "success", `Đã mời ${email}.`);
   } catch (error) {
@@ -241,19 +234,21 @@ export async function respondInvitation(invitationId: string, accept: boolean, p
 }
 
 export async function submitReview(cardId: string, sessionId: string, rating: ReviewRating) {
-  const { supabase } = await userForRole("student");
+  const { supabase } = await userOrThrow();
   const { data: progress } = await supabase.from("card_progress").select("fsrs").eq("card_id", cardId).maybeSingle();
   const before = (progress?.fsrs as Record<string, unknown> | null) ?? {};
   const review = nextReview(Object.keys(before).length ? before : null, rating);
   const after = JSON.parse(JSON.stringify(review.card));
   const { error } = await supabase.rpc("record_review", { target_card: cardId, target_session: sessionId, selected_rating: rating, previous_state: before, next_state: after, reviewed_time: new Date().toISOString() });
   if (error) throw new Error(error.message);
+  revalidatePath("/student");
   return { due: review.card.due.toISOString() };
 }
 
 export async function undoReview(sessionId: string) {
-  const { supabase } = await userForRole("student");
+  const { supabase } = await userOrThrow();
   const { data, error } = await supabase.rpc("undo_latest_review", { target_session: sessionId });
   if (error) throw new Error(error.message);
+  revalidatePath("/student");
   return { cardId: data as string };
 }

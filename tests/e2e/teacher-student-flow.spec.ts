@@ -146,6 +146,8 @@ for (const source of ["manual", "Excel"] as const) {
     await openInvitation(student, className);
     await student.getByRole("button", { name: "Tham gia" }).click();
     await expect(student.getByRole("heading", { name: "Không có thông báo mới" })).toBeVisible();
+    await teacher.goto(classPath);
+    await expect.soft(teacher.getByRole("row").filter({ hasText: studentEmail }).getByRole("cell").nth(2)).toHaveText("2");
     await student.goto("/student");
     await expect(student.getByRole("link", { name: /lời mời lớp học mới/ })).toHaveCount(0);
     await student.getByRole("link", { name: new RegExp(lessonTitle) }).click();
@@ -157,6 +159,8 @@ for (const source of ["manual", "Excel"] as const) {
     await student.getByRole("button", { name: "Lật thẻ để xem đáp án" }).click();
     await student.getByRole("button", { name: source === "Excel" ? /Đúng, phím 3/ : /Sai, phím 1/ }).click();
     await expect(student.getByRole("heading", { name: "Đã học xong hôm nay." })).toBeVisible();
+    await student.getByRole("link", { name: "Trở về lớp" }).click();
+    await expect.soft(student.getByRole("link", { name: new RegExp(lessonTitle) })).toContainText("Đã học xong hôm nay");
 
     await teacher.goto(classPath);
     const progress = teacher.getByRole("row").filter({ hasText: studentEmail });
@@ -214,6 +218,28 @@ test("declining an invitation keeps the student outside the class and its publis
   await expect(student.getByRole("heading", { name: "Không tìm thấy trang" })).toBeVisible();
   await teacher.goto(classPath);
   await expect(teacher.getByText("Chưa có học viên tham gia.")).toBeVisible();
+});
+
+test("a known student can be invited again and a revoked invitation clears the unread badge", async ({ actors }) => {
+  const { teacher, student, studentEmail } = actors;
+  const first = await createClassAndLesson(teacher, "Lớp đã tham gia", "Bài nháp");
+  await sendInvitation(teacher, first.classPath, studentEmail);
+  await openInvitation(student, "Lớp đã tham gia");
+  await student.getByRole("button", { name: "Tham gia" }).click();
+  await expect(student.getByRole("heading", { name: "Không có thông báo mới" })).toBeVisible();
+
+  const second = await createClassAndLesson(teacher, "Lớp mời tiếp", "Bài nháp");
+  await sendInvitation(teacher, second.classPath, studentEmail);
+  await teacher.getByRole("textbox", { name: "Email học viên" }).fill(studentEmail);
+  await teacher.getByRole("button", { name: "Mời", exact: true }).click();
+  await expect(teacher.getByRole("alert").filter({ hasText: "Email này đã có lời mời đang chờ." })).toBeVisible();
+  await openInvitation(student, "Lớp mời tiếp");
+  teacher.once("dialog", (dialog) => dialog.accept());
+  await teacher.getByRole("button", { name: "Thu hồi", exact: true }).click();
+  await expect(teacher.getByRole("button", { name: "Thu hồi", exact: true })).toHaveCount(0);
+  await student.reload();
+  await expect(student.getByRole("heading", { name: "Không có thông báo mới" })).toBeVisible();
+  await expect(student.getByRole("link", { name: /Thông báo/ })).not.toHaveAccessibleName(/chưa đọc/);
 });
 
 test("undoing a review removes it from the teacher's progress report", async ({ actors }) => {
