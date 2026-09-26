@@ -11,7 +11,33 @@ const actions = [
   { rating: "hard" as const, label: "Chưa chắc", key: "2", Icon: QuestionMark, tone: "text-unsure" },
   { rating: "good" as const, label: "Đúng", key: "3", Icon: Check, tone: "text-correct" },
 ];
-const SWIPE_THRESHOLD = 90;
+const SWIPE_THRESHOLD = 56;
+
+function CardFaces({ card, flipped }: { card: StudyCard; flipped: boolean }) {
+  return (
+    <span className={`flip-plane block min-h-[clamp(340px,calc(100dvh-400px),430px)] sm:min-h-[520px] ${flipped ? "is-flipped" : ""}`}>
+      <span role="group" aria-label="Mặt trước" aria-hidden={flipped} className="flip-face flip-front p-7 sm:p-12">
+        <span className="text-sm font-semibold text-muted">Chạm để lật · Vuốt trái Sai / phải Đúng</span>
+        <span className="font-jp break-words text-center text-[clamp(5rem,16vw,9rem)] font-semibold leading-none tracking-[-.03em]">{card.kanji}</span>
+        <span className="text-right text-xs font-bold uppercase tracking-[.08em] text-muted">Kanji</span>
+      </span>
+      <span role="group" aria-label="Mặt sau" aria-hidden={!flipped} className="flip-face flip-back p-7 sm:p-12">
+        <span className="text-sm font-semibold text-muted">Mặt sau</span>
+        <span className="space-y-8">
+          <span className="block">
+            <span className="font-jp block break-words text-4xl font-semibold sm:text-5xl">{card.hiragana}</span>
+            <span className="mt-3 block break-words text-2xl font-bold sm:text-3xl">{card.meaning_vi}</span>
+          </span>
+          <span className="block border-t border-line pt-7">
+            <span className="font-jp block break-words text-xl leading-relaxed sm:text-2xl">{card.example_ja}</span>
+            <span className="mt-3 block break-words text-base leading-relaxed text-muted sm:text-lg">{card.example_vi}</span>
+          </span>
+        </span>
+        <span className="text-right text-xs font-bold uppercase tracking-[.08em] text-muted">Vuốt trái Sai · Vuốt phải Đúng</span>
+      </span>
+    </span>
+  );
+}
 
 type StudySessionProps = {
   mode: "study" | "preview";
@@ -34,9 +60,11 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
   const [dragging, setDragging] = useState(false);
   const [swipeSettling, setSwipeSettling] = useState(false);
   const [pending, startTransition] = useTransition();
-  const gesture = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null);
+  const gesture = useRef<{ id: number; x: number; y: number; left: number; right: number; moved: boolean } | null>(null);
+  const activeCard = useRef<HTMLDivElement>(null);
   const suppressClick = useRef(false);
   const swipeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const swipeRating = useRef<ReviewRating | null>(null);
   const sessionId = useMemo(() => mode === "study" ? crypto.randomUUID() : null, [mode]);
   const total = sessionCards.length;
   const current = queue[0];
@@ -46,6 +74,10 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
 
   useEffect(() => { heading.current?.focus({ preventScroll: true }); }, [finished]);
   useEffect(() => () => { if (swipeTimer.current) clearTimeout(swipeTimer.current); }, []);
+  useEffect(() => {
+    document.documentElement.classList.add("study-swipe-session");
+    return () => document.documentElement.classList.remove("study-swipe-session");
+  }, []);
 
   const grade = useCallback((rating: ReviewRating, fromSwipe = false) => {
     if (!current || pending || (swipeSettling && !fromSwipe)) return;
@@ -77,10 +109,26 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
     });
   }, [backFirst, current, mode, pending, sessionId, swipeSettling]);
 
+  const finishSwipe = () => {
+    const rating = swipeRating.current;
+    if (!rating) return;
+    const bounds = activeCard.current?.getBoundingClientRect();
+    if (bounds && bounds.right >= 0 && bounds.left <= window.innerWidth) {
+      swipeTimer.current = setTimeout(finishSwipe, 50);
+      return;
+    }
+    swipeRating.current = null;
+    if (swipeTimer.current) clearTimeout(swipeTimer.current);
+    swipeTimer.current = null;
+    grade(rating, true);
+  };
+
   const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (pending || swipeSettling || !event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) return;
     suppressClick.current = false;
-    gesture.current = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+    const card = event.currentTarget.parentElement?.getBoundingClientRect();
+    if (!card) return;
+    gesture.current = { id: event.pointerId, x: event.clientX, y: event.clientY, left: card.left, right: card.right, moved: false };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
@@ -92,7 +140,7 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
     if (!start.moved && (Math.abs(dx) < 10 || Math.abs(dx) <= Math.abs(dy) * 1.2)) return;
     start.moved = true;
     setDragging(true);
-    setSwipeOffset(Math.max(-180, Math.min(180, dx)));
+    setSwipeOffset(dx);
   };
 
   const onPointerEnd = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -106,12 +154,10 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
       setSwipeOffset(0);
       return;
     }
-    setSwipeOffset(dx < 0 ? -180 : 180);
+    setSwipeOffset(dx < 0 ? -(start.right + 96) : window.innerWidth - start.left + 96);
     setSwipeSettling(true);
-    swipeTimer.current = setTimeout(() => {
-      swipeTimer.current = null;
-      grade(dx < 0 ? "again" : "good", true);
-    }, window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 170);
+    swipeRating.current = dx < 0 ? "again" : "good";
+    swipeTimer.current = setTimeout(finishSwipe, window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 700);
   };
 
   const undo = useCallback(() => {
@@ -159,6 +205,7 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
     setQueue(sessionCards);
     setSwipeOffset(0);
     setSwipeSettling(false);
+    swipeRating.current = null;
     setFlipped(backFirst);
     setLast(null);
     setError("");
@@ -249,51 +296,47 @@ export function StudySession({ mode, lessonTitle, cards, initialDirection = "fro
         </button>
       </div>
       <div className="flex flex-1 flex-col items-center justify-center py-4 sm:py-8">
-        <div
-          key={current.id}
-          className={`flip-stage paper-shadow card-enter relative min-h-[clamp(340px,calc(100dvh-400px),430px)] w-full max-w-3xl rounded-2xl bg-surface-strong text-left sm:min-h-[520px] ${dragging ? "is-dragging" : ""}`}
-          style={{ transform: `translateX(${swipeOffset}px) rotate(${swipeOffset / 22}deg)`, opacity: swipeSettling ? 0.55 : 1 }}
-        >
-          {Math.abs(swipeOffset) > 24 ? <span className={`swipe-verdict absolute top-5 z-10 rounded-full px-4 py-2 text-sm font-bold ${swipeOffset < 0 ? "left-5 bg-wrong/10 text-wrong" : "right-5 bg-correct/10 text-correct"}`}>{swipeOffset < 0 ? "Sai" : "Đúng"}</span> : null}
-          <span className={`flip-plane block min-h-[clamp(340px,calc(100dvh-400px),430px)] sm:min-h-[520px] ${flipped ? "is-flipped" : ""}`}>
-            <span role="group" aria-label="Mặt trước" aria-hidden={flipped} className="flip-face flip-front p-7 sm:p-12">
-              <span className="text-sm font-semibold text-muted">Chạm để lật · Vuốt trái Sai / phải Đúng</span>
-              <span className="font-jp break-words text-center text-[clamp(5rem,16vw,9rem)] font-semibold leading-none tracking-[-.03em]">{current.kanji}</span>
-              <span className="text-right text-xs font-bold uppercase tracking-[.08em] text-muted">Kanji</span>
-            </span>
-            <span role="group" aria-label="Mặt sau" aria-hidden={!flipped} className="flip-face flip-back p-7 sm:p-12">
-              <span className="text-sm font-semibold text-muted">Mặt sau</span>
-              <span className="space-y-8">
-                <span className="block">
-                  <span className="font-jp block break-words text-4xl font-semibold sm:text-5xl">{current.hiragana}</span>
-                  <span className="mt-3 block break-words text-2xl font-bold sm:text-3xl">{current.meaning_vi}</span>
-                </span>
-                <span className="block border-t border-line pt-7">
-                  <span className="font-jp block break-words text-xl leading-relaxed sm:text-2xl">{current.example_ja}</span>
-                  <span className="mt-3 block break-words text-base leading-relaxed text-muted sm:text-lg">{current.example_vi}</span>
-                </span>
-              </span>
-              <span className="text-right text-xs font-bold uppercase tracking-[.08em] text-muted">Vuốt trái Sai · Vuốt phải Đúng</span>
-            </span>
-          </span>
-          <button
-            type="button"
-            onClick={(event) => {
-              if (suppressClick.current && event.detail !== 0) { suppressClick.current = false; return; }
-              if (!pending && !swipeSettling) setFlipped((value) => !value);
+        <div className="relative w-full max-w-3xl">
+          {(dragging || swipeSettling) && queue[1] ? (
+            <div aria-hidden="true" className="flip-stage paper-shadow pointer-events-none absolute inset-0 rounded-2xl bg-surface-strong text-left">
+              <CardFaces card={queue[1]} flipped={backFirst} />
+              {pending ? <span className="absolute inset-0 grid place-items-center bg-surface-strong/50"><span className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-muted">Đang lưu…</span></span> : null}
+            </div>
+          ) : null}
+          {swipeSettling && pending && !queue[1] ? (
+            <div aria-hidden="true" className="paper-shadow absolute inset-0 grid place-items-center rounded-2xl bg-surface-strong text-sm font-semibold text-muted">Đang lưu thẻ cuối…</div>
+          ) : null}
+          <div
+            key={current.id}
+            ref={activeCard}
+            className={`flip-stage paper-shadow relative min-h-[clamp(340px,calc(100dvh-400px),430px)] w-full rounded-2xl bg-surface-strong text-left sm:min-h-[520px] ${dragging ? "is-dragging" : ""} ${swipeSettling ? "is-exiting" : ""}`}
+            style={{ transform: `translateX(${swipeOffset}px) rotate(${Math.max(-12, Math.min(12, swipeOffset / 18))}deg)` }}
+            onTransitionEnd={(event) => {
+              if (event.target !== event.currentTarget || event.propertyName !== "transform" || !swipeSettling) return;
+              finishSwipe();
             }}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerEnd}
-            onPointerCancel={onPointerEnd}
-            className="flip-hit-target absolute inset-0 z-10 w-full cursor-pointer rounded-2xl"
-            aria-label={flipped ? "Xem mặt kanji" : "Lật thẻ để xem đáp án"}
-          />
+          >
+            {Math.abs(swipeOffset) > 20 && !swipeSettling ? <span className={`swipe-verdict absolute top-5 z-10 rounded-full px-4 py-2 text-sm font-bold ${swipeOffset < 0 ? "left-5 bg-wrong/10 text-wrong" : "right-5 bg-correct/10 text-correct"}`}>{swipeOffset < 0 ? "Sai" : "Đúng"}</span> : null}
+            <CardFaces card={current} flipped={flipped} />
+            <button
+              type="button"
+              onClick={(event) => {
+                if (suppressClick.current && event.detail !== 0) { suppressClick.current = false; return; }
+                if (!pending && !swipeSettling) setFlipped((value) => !value);
+              }}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerEnd}
+              onPointerCancel={onPointerEnd}
+              className="flip-hit-target absolute inset-0 z-10 w-full cursor-pointer rounded-2xl"
+              aria-label={flipped ? "Xem mặt kanji" : "Lật thẻ để xem đáp án"}
+            />
+          </div>
         </div>
         <p className="mt-5 hidden text-center text-xs font-semibold text-muted md:block">Vuốt trái: Sai · Vuốt phải: Đúng · Chạm để lật</p>
       </div>
       {error && <p role="alert" className="mb-4 text-center text-sm font-semibold text-wrong">{error}</p>}
-      <p role="status" className="mb-4 min-h-5 text-center text-sm text-muted">{pending ? "Đang lưu thay đổi…" : notice}</p>
+      <p role="status" className={`mb-4 min-h-5 text-center text-sm text-muted ${pending && swipeSettling ? "opacity-0" : ""}`}>{pending ? "Đang lưu thay đổi…" : notice}</p>
       <div className="answer-controls fixed inset-x-0 bottom-0 z-20 border-t border-line bg-canvas/95 px-3 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm md:static md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
         <div className="mx-auto grid max-w-xl grid-cols-4 gap-2 sm:gap-5">
           {actions.map(({ rating, label, key, Icon, tone }) => (

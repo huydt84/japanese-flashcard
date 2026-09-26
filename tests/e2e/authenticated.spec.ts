@@ -144,6 +144,41 @@ test("teacher, student and study surfaces render from authenticated data", async
   await expect(page.getByText("まなぶ", { exact: true })).toBeVisible();
   await page.waitForTimeout(750);
   await page.screenshot({ path: `.impeccable/review/study${suffix}.png`, fullPage: true });
+
+  let releaseSave!: () => void;
+  const saveGate = new Promise<void>((resolve) => { releaseSave = resolve; });
+  await page.route("**/*", async (route) => {
+    if (route.request().method() === "POST" && new URL(route.request().url()).origin === new URL(page.url()).origin) {
+      await saveGate;
+    }
+    await route.continue();
+  });
+  const activeCard = page.locator(".flip-stage:not([aria-hidden])");
+  const bounds = await activeCard.boundingBox();
+  if (!bounds) throw new Error("Study card is not visible");
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+  await page.mouse.move(centerX, centerY);
+  await page.mouse.down();
+  await page.mouse.move(centerX + 70, centerY, { steps: 8 });
+  await page.mouse.up();
+  try {
+    await expect(page.getByRole("status")).toHaveText("Đang lưu thay đổi…");
+    await expect(page.getByText("Đang lưu thẻ cuối…")).toBeVisible();
+    const exitedCard = await activeCard.evaluate((element) => element.getBoundingClientRect().left);
+    expect(exitedCard).toBeGreaterThan(page.viewportSize()!.width);
+    if (testInfo.project.name === "desktop") {
+      await page.mouse.wheel(500, 0);
+      await page.waitForTimeout(100);
+      expect(await page.evaluate(() => window.scrollX)).toBe(0);
+    }
+    await page.screenshot({ path: `.impeccable/review/study-swipe-saving-${testInfo.project.name}.png`, fullPage: true });
+  } finally {
+    releaseSave();
+  }
+  await expect(page.getByRole("heading", { name: "Đã hoàn thành phiên học." })).toBeVisible();
+  await page.getByRole("button", { name: "Hoàn tác thẻ cuối" }).click();
+  await expect(page.getByText("まなぶ", { exact: true })).toBeVisible();
 });
 
 test("admin switches between the real student and teacher workspaces", async ({ page }) => {
@@ -221,6 +256,7 @@ test("teacher previews draft and published lessons without writing student progr
 
   await page.getByRole("button", { name: /Sai, phím 1/ }).click();
   await page.getByRole("button", { name: "Xem lại từ đầu" }).click();
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   const dragCard = async (distance: number) => {
     const bounds = await page.locator(".flip-stage").boundingBox();
     if (!bounds) throw new Error("Study card is not visible");
@@ -231,6 +267,20 @@ test("teacher previews draft and published lessons without writing student progr
     await page.mouse.move(x + distance, y, { steps: 8 });
     await page.mouse.up();
   };
+  const watchSwipeExit = async () => {
+    await page.evaluate(() => {
+      delete document.documentElement.dataset.swipeExit;
+      const card = document.querySelector<HTMLElement>(".flip-stage:not([aria-hidden])");
+      const recordExit = (event: Event) => {
+        if (event.target === card && (event as TransitionEvent).propertyName === "transform" && card?.classList.contains("is-exiting")) {
+          const bounds = card.getBoundingClientRect();
+          document.documentElement.dataset.swipeExit = JSON.stringify({ left: bounds.left, right: bounds.right });
+          card.removeEventListener("transitionend", recordExit);
+        }
+      };
+      card?.addEventListener("transitionend", recordExit);
+    });
+  };
   await dragCard(45);
   await expect(page.getByText("1 / 2", { exact: true })).toBeVisible();
   await expect(page.locator(".flip-stage")).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 0)");
@@ -238,9 +288,17 @@ test("teacher previews draft and published lessons without writing student progr
   await page.keyboard.press("Space");
   await expect(page.getByText("よむ", { exact: true })).toBeVisible();
   await page.keyboard.press("Space");
-  await dragCard(120);
+  await watchSwipeExit();
+  await dragCard(70);
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.swipeExit ?? "")).not.toBe("");
+  const rightExit = JSON.parse((await page.evaluate(() => document.documentElement.dataset.swipeExit))!);
+  expect(rightExit.left).toBeGreaterThan(page.viewportSize()!.width);
   await expect(page.getByText("2 / 2", { exact: true })).toBeVisible();
-  await dragCard(-120);
+  await watchSwipeExit();
+  await dragCard(-70);
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.swipeExit ?? "")).not.toBe("");
+  const leftExit = JSON.parse((await page.evaluate(() => document.documentElement.dataset.swipeExit))!);
+  expect(leftExit.right).toBeLessThan(0);
   await expect(page.getByRole("heading", { name: "Đã xem hết thẻ." })).toBeVisible();
 
   const admin = createClient(apiUrl, secretKey, { auth: { persistSession: false } });
