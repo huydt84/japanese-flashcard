@@ -1,3 +1,4 @@
+import { startFlashcards } from "./helpers/study";
 import { expect, test as base, type Page } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import ExcelJS from "exceljs";
@@ -135,6 +136,7 @@ for (const source of ["manual", "Excel"] as const) {
     }
     await teacher.getByRole("link", { name: "Xem demo tiết học" }).click();
     await expect(teacher.getByText("Xem thử · Không lưu kết quả")).toBeVisible();
+    await startFlashcards(teacher);
     await teacher.getByRole("button", { name: "Lật thẻ để xem đáp án" }).click();
     await teacher.getByRole("button", { name: /Đúng, phím 3/ }).click();
     await expect(teacher.getByText("食べる", { exact: true })).toBeVisible();
@@ -151,6 +153,7 @@ for (const source of ["manual", "Excel"] as const) {
     await student.goto("/student");
     await expect(student.getByRole("link", { name: /lời mời lớp học mới/ })).toHaveCount(0);
     await student.getByRole("link", { name: new RegExp(lessonTitle) }).click();
+    await startFlashcards(student);
 
     await expect(student.getByText("学ぶ", { exact: true })).toBeVisible();
     await student.getByRole("button", { name: "Lật thẻ để xem đáp án" }).click();
@@ -158,7 +161,9 @@ for (const source of ["manual", "Excel"] as const) {
     await expect(student.getByText("食べる", { exact: true })).toBeVisible();
     await student.getByRole("button", { name: "Lật thẻ để xem đáp án" }).click();
     await student.getByRole("button", { name: source === "Excel" ? /Đúng, phím 3/ : /Sai, phím 1/ }).click();
-    await expect(student.getByRole("heading", { name: "Đã học xong hôm nay." })).toBeVisible();
+    await expect(student.getByRole("heading", { name: "Đã hoàn thành phiên học." })).toBeVisible();
+    await student.getByRole("button", { name: "Quay lại bài học" }).click();
+    await expect(student.getByRole("heading", { name: "Từ vựng trong bài" })).toBeVisible();
     await student.getByRole("link", { name: "Trở về lớp" }).click();
     await expect.soft(student.getByRole("link", { name: new RegExp(lessonTitle) })).toContainText("Đã học xong hôm nay");
 
@@ -258,6 +263,7 @@ test("reverse study saves ratings from either face and undo after shuffling upda
   await expect(student.getByRole("heading", { name: "Không có thông báo mới" })).toBeVisible();
   await student.goto("/student");
   await student.getByRole("link", { name: new RegExp(lessonTitle) }).click();
+    await startFlashcards(student);
 
   await student.getByRole("combobox", { name: "Chiều học" }).selectOption("back-first");
   await expect(student.getByText("きく", { exact: true })).toBeVisible();

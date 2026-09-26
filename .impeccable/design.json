@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-16T09:42:42Z",
+  "generatedAt": "2026-09-26T10:55:56Z",
   "title": "Design System: Kotoba",
   "extensions": {
     "colorMeta": {
@@ -70,6 +70,8 @@
         "canonical": "#168a55",
         "tonalRamp": ["oklch(15% 0.08 155)", "oklch(26% 0.11 155)", "oklch(38% 0.14 155)", "oklch(50% 0.16 155)", "oklch(62% 0.14 155)", "oklch(74% 0.11 155)", "oklch(86% 0.07 155)", "oklch(95% 0.03 155)"]
       },
+      "correct-ink": {"role": "tertiary", "displayName": "Success Feedback Ink", "tonalRamp": ["oklch(15% 0.08 155)", "oklch(26% 0.11 155)", "oklch(38% 0.14 155)", "oklch(50% 0.16 155)", "oklch(62% 0.14 155)", "oklch(74% 0.11 155)", "oklch(86% 0.07 155)", "oklch(95% 0.03 155)"]},
+      "wrong-ink": {"role": "tertiary", "displayName": "Answer Feedback Ink", "tonalRamp": ["oklch(15% 0.12 24)", "oklch(26% 0.15 24)", "oklch(38% 0.18 24)", "oklch(50% 0.2 24)", "oklch(62% 0.18 24)", "oklch(74% 0.14 24)", "oklch(86% 0.09 24)", "oklch(95% 0.04 24)"]},
       "focus": {
         "role": "secondary",
         "displayName": "Focus Blue",
@@ -91,6 +93,7 @@
       { "name": "focus-ring", "value": "0 0 0 3px color-mix(in srgb, var(--focus) 45%, transparent)", "purpose": "Visible keyboard focus on all interactive elements." }
     ],
     "motion": [
+      { "name": "dialog-enter", "value": "180ms ease-out", "purpose": "Setup dialog fades in with 6px upward travel; disabled for reduced motion." },
       { "name": "state-standard", "value": "180ms ease", "purpose": "Button color and press-state transitions." },
       { "name": "card-enter", "value": "420ms cubic-bezier(.16, 1, .3, 1)", "purpose": "A new study card settles onto the desk." },
       { "name": "card-flip", "value": "620ms cubic-bezier(.16, 1, .3, 1)", "purpose": "Front and back move as one physical plane." },
@@ -110,7 +113,7 @@
       "refersTo": "button-primary",
       "description": "The single strongest action in a working region.",
       "html": "<button class=\"ds-btn-primary\">Tạo lớp</button>",
-      "css": ".ds-btn-primary { display:inline-flex; min-height:44px; align-items:center; justify-content:center; gap:.5rem; border:0; border-radius:12px; background:var(--brand,#c63d3d); color:#fff; padding:.7rem 1rem; font:700 .86rem/1.25 Geist,sans-serif; transition:background .18s ease,transform .18s ease; cursor:pointer; } .ds-btn-primary:hover { background:var(--brand-strong,#a82e32); } .ds-btn-primary:focus-visible { outline:none; box-shadow:0 0 0 3px color-mix(in srgb,var(--focus,#245e9b) 45%,transparent); } .ds-btn-primary:active { transform:translateY(1px); }"
+      "css": ".ds-btn-primary { display:inline-flex; min-height:44px; align-items:center; justify-content:center; gap:.5rem; border:0; border-radius:12px; background:var(--brand,#c63d3d); color:#fff; padding:.7rem 1rem; font:700 .86rem/1.25 Geist,sans-serif; transition:background .18s ease,transform .18s ease; cursor:pointer; } .ds-btn-primary:hover { background:var(--brand-strong,#a82e32); } .ds-btn-primary:focus-visible { outline:none; box-shadow:0 0 0 3px color-mix(in srgb,var(--focus,#245e9b) 45%,transparent); } .ds-btn-primary:active { transform:translateY(1px); } @media(prefers-color-scheme:dark) { .ds-btn-primary { color:var(--canvas,#14191f); } }"
     },
     {
       "name": "Secondary Button",
@@ -164,9 +167,24 @@
       "name": "Review Controls",
       "kind": "custom",
       "refersTo": "review-control",
-      "description": "The four labeled circular actions used after revealing a study card.",
+      "description": "The four labeled circular actions available on either face of a study card.",
       "html": "<div class=\"ds-review-controls\"><button class=\"ds-review ds-review-undo\"><span>↶</span><b>Hoàn tác</b><kbd>U</kbd></button><button class=\"ds-review ds-review-wrong\"><span>×</span><b>Sai</b><kbd>1</kbd></button><button class=\"ds-review ds-review-unsure\"><span>?</span><b>Chưa chắc</b><kbd>2</kbd></button><button class=\"ds-review ds-review-correct\"><span>✓</span><b>Đúng</b><kbd>3</kbd></button></div>",
       "css": ".ds-review-controls { display:grid; max-width:576px; grid-template-columns:repeat(4,1fr); gap:8px; font-family:Geist,sans-serif; } .ds-review { display:flex; flex-direction:column; align-items:center; gap:6px; border:0; background:transparent; color:var(--ink,#1e252d); cursor:pointer; } .ds-review span { display:grid; width:56px; height:56px; place-items:center; border-radius:9999px; background:var(--surface-strong,#fff); box-shadow:var(--shadow,0 22px 55px rgba(49,63,77,.12)); font-size:28px; font-weight:700; transition:transform .18s ease; } .ds-review:hover span { transform:translateY(-4px); } .ds-review:focus-visible { outline:none; } .ds-review:focus-visible span { box-shadow:0 0 0 3px color-mix(in srgb,var(--focus,#245e9b) 45%,transparent),var(--shadow,0 22px 55px rgba(49,63,77,.12)); } .ds-review:active span { transform:translateY(1px); } .ds-review b { font-size:12px; } .ds-review kbd { color:var(--muted,#596570); font-size:10px; } .ds-review-undo span { color:var(--muted,#596570); } .ds-review-wrong span { color:var(--wrong,#d73b3e); } .ds-review-unsure span { color:var(--unsure,#a86600); } .ds-review-correct span { color:var(--correct,#168a55); }"
+    },
+    {
+      "name": "Study Setup Dialog",
+      "kind": "custom",
+      "refersTo": "paper-card",
+      "description": "Shared centered setup for both activities. Production uses a native modal, scroll lock, keyboard focus cycling, and focus restoration; this preview shows the field and fixed action footer.",
+      "html": "<dialog open class=\"ds-study-dialog\" aria-labelledby=\"ds-setup-title\"><header><h2 id=\"ds-setup-title\">Thẻ ghi nhớ</h2><p>Chọn cách học phù hợp với bạn.</p></header><div class=\"ds-setup-body\"><label for=\"ds-direction\">Chiều học</label><span class=\"ds-select-wrap\"><select id=\"ds-direction\"><option>Mặt Kanji trước</option><option>Mặt cách đọc và nghĩa trước</option></select><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"m6 9 6 6 6-6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></span></div><footer><button class=\"ds-setup-cancel\">Hủy</button><button class=\"ds-setup-start\">Bắt đầu</button></footer></dialog>",
+      "css": ".ds-study-dialog { position:relative; display:flex; flex-direction:column; width:min(calc(100% - 2rem),34rem); max-height:calc(100dvh - 2rem); margin:auto; padding:0; border:0; border-radius:16px; overflow:hidden; background:var(--surface-strong,#fff); color:var(--ink,#1e252d); color-scheme:light; box-shadow:var(--shadow,0 22px 55px rgba(49,63,77,.12)); font-family:Geist,sans-serif; } .ds-study-dialog::backdrop { background:rgba(16,23,31,.55); } .ds-study-dialog header,.ds-study-dialog footer { flex-shrink:0; padding:24px; } .ds-study-dialog header { border-bottom:1px solid var(--line,#d8dde2); } .ds-study-dialog h2 { margin:0; font-size:24px; font-weight:700; } .ds-study-dialog p { margin:8px 0 0; font-size:14px; color:var(--muted,#596570); } .ds-setup-body { min-height:0; overflow-y:auto; padding:24px; } .ds-setup-body label { display:block; margin-bottom:.45rem; font-size:.86rem; font-weight:650; } .ds-select-wrap { position:relative; display:block; } .ds-select-wrap select { appearance:none; width:100%; min-height:44px; border:1px solid var(--line,#d8dde2); border-radius:12px; background:var(--surface-strong,#fff); color:var(--ink,#1e252d); padding:.8rem 2.5rem .8rem .9rem; font:inherit; } .ds-select-wrap svg { position:absolute; right:12px; top:50%; width:16px; height:16px; transform:translateY(-50%); color:var(--muted,#596570); pointer-events:none; } .ds-select-wrap select:focus { outline:none; border-color:var(--focus,#245e9b); box-shadow:0 0 0 3px color-mix(in srgb,var(--focus,#245e9b) 20%,transparent); } .ds-study-dialog footer { display:flex; justify-content:flex-end; gap:12px; border-top:1px solid var(--line,#d8dde2); } .ds-study-dialog button { min-height:44px; border-radius:12px; padding:.7rem 1rem; font:650 1rem/1.5 Geist,sans-serif; cursor:pointer; } .ds-setup-cancel { border:1px solid var(--line,#d8dde2); background:var(--surface-strong,#fff); color:var(--ink,#1e252d); } .ds-setup-start { border:0; background:var(--brand,#c63d3d); color:#fff; transition:background .18s ease,transform .18s ease; } .ds-setup-start:hover { background:var(--brand-strong,#a82e32); } .ds-study-dialog button:focus-visible { outline:none; box-shadow:0 0 0 3px color-mix(in srgb,var(--focus,#245e9b) 45%,transparent); } .ds-study-dialog button:active { transform:translateY(1px); } @media(prefers-color-scheme:dark) { .ds-study-dialog { color-scheme:dark; } .ds-setup-start { color:var(--canvas,#14191f); } } @media(prefers-reduced-motion:reduce) { .ds-setup-start { transition:none; } }"
+    },
+    {
+      "name": "Quiz Answer",
+      "kind": "button",
+      "description": "A flat answer option with labeled semantic feedback. Answered options remain readable and focusable while further selection is guarded.",
+      "html": "<button class=\"ds-quiz-option\"><span class=\"ds-option-letter\" aria-hidden=\"true\">A</span><span>Học</span></button><p class=\"ds-quiz-feedback\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"m5 12 4 4L19 6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>Chính xác!</p>",
+      "css": ".ds-quiz-option { display:flex; width:100%; min-height:64px; align-items:center; gap:16px; border:1px solid var(--line,#d8dde2); border-radius:12px; background:var(--surface-strong,#fff); color:var(--ink,#1e252d); padding:16px; text-align:left; font:600 1rem/1.5 Geist,sans-serif; transition:background .18s ease,border-color .18s ease,transform .18s ease; cursor:pointer; } .ds-option-letter { display:grid; width:32px; height:32px; flex-shrink:0; place-items:center; border-radius:9999px; background:var(--surface,#f9fafb); font-size:14px; font-weight:700; } .ds-quiz-option:hover:not([aria-disabled=true]) { border-color:var(--brand,#c63d3d); background:var(--surface,#f9fafb); } .ds-quiz-option:focus-visible { outline:none; box-shadow:0 0 0 3px color-mix(in srgb,var(--focus,#245e9b) 45%,transparent); } .ds-quiz-option:active:not([aria-disabled=true]) { transform:translateY(1px); } .ds-quiz-option[aria-disabled=true] { cursor:default; } .ds-quiz-feedback { display:flex; align-items:center; gap:8px; color:color-mix(in srgb,var(--correct,#168a55) 80%,var(--ink,#1e252d)); font:700 1rem/1.5 Geist,sans-serif; } .ds-quiz-feedback svg { width:20px; height:20px; } @media(prefers-reduced-motion:reduce) { .ds-quiz-option { transition:none; } }"
     }
   ],
   "narrative": {

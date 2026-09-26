@@ -14,7 +14,7 @@ const cards = [
 
 describe("teacher flashcard preview", () => {
   it("runs through the cards, undoes the final answer and restarts without saving progress", () => {
-    render(<StudySession mode="preview" lessonTitle="Buổi 1" cards={cards} backHref="/teacher/classes/class-1/lessons/lesson-1" />);
+    render(<StudySession mode="preview" lessonTitle="Buổi 1" cards={cards} onExit={() => {}} />);
 
     expect(screen.getByText("Xem thử · Không lưu kết quả")).toBeInTheDocument();
     for (const name of [/Hoàn tác, phím U/, /Sai, phím 1/, /Chưa chắc, phím 2/, /Đúng, phím 3/]) {
@@ -51,7 +51,7 @@ describe("teacher flashcard preview", () => {
 });
 
 it("starts each card on the selected face, including after undo and restart", () => {
-  render(<StudySession mode="preview" lessonTitle="Buổi 1" cards={cards} backHref="/teacher" />);
+  render(<StudySession mode="preview" lessonTitle="Buổi 1" cards={cards} onExit={() => {}} />);
   const direction = screen.getByRole("combobox", { name: "Chiều học" });
   fireEvent.change(direction, { target: { value: "back-first" } });
   fireEvent.keyDown(direction, { key: "3" });
@@ -82,7 +82,7 @@ it("shuffles only remaining cards without losing progress, cards or the latest u
     { ...cards[0], id: "three", kanji: "読む", hiragana: "よむ" },
     { ...cards[0], id: "four", kanji: "書く", hiragana: "かく" },
   ];
-  render(<StudySession mode="preview" lessonTitle="Buổi 1" cards={deck} backHref="/teacher" />);
+  render(<StudySession mode="preview" lessonTitle="Buổi 1" cards={deck} onExit={() => {}} />);
   fireEvent.keyDown(window, { key: "3" });
   fireEvent.change(screen.getByRole("combobox", { name: "Chiều học" }), { target: { value: "back-first" } });
   fireEvent.click(screen.getByRole("button", { name: "Xem mặt kanji" }));
@@ -112,7 +112,7 @@ it.each([
   ["1", "again"], ["2", "hard"], ["3", "good"],
 ])("saves a student's rating with shortcut %s from the front face", async (key, rating) => {
   submitReview.mockResolvedValue({ due: "2030-01-01" });
-  render(<StudySession mode="study" lessonTitle="Buổi 1" cards={cards} backHref="/student" />);
+  render(<StudySession mode="study" lessonTitle="Buổi 1" cards={cards} onExit={() => {}} />);
   fireEvent.keyDown(window, { key });
   await screen.findByText("食べる");
   expect(submitReview).toHaveBeenCalledExactlyOnceWith("one", expect.any(String), rating);
@@ -122,7 +122,7 @@ it.each([
 it("keeps the current card on a failed save and prevents grading or shuffling while saving", async () => {
   let rejectSave!: (error: Error) => void;
   submitReview.mockImplementationOnce(() => new Promise((_, reject) => { rejectSave = reject; }));
-  render(<StudySession mode="study" lessonTitle="Buổi 1" cards={cards} backHref="/student" />);
+  render(<StudySession mode="study" lessonTitle="Buổi 1" cards={cards} onExit={() => {}} />);
   fireEvent.click(screen.getByRole("button", { name: /Đúng, phím 3/ }));
   fireEvent.keyDown(window, { key: "1" });
   fireEvent.keyDown(window, { key: "u" });
@@ -142,10 +142,10 @@ it("keeps the current card on a failed save and prevents grading or shuffling wh
 it("lets a student undo the final answer, including retrying a failed undo", async () => {
   submitReview.mockResolvedValue({ due: "2030-01-01" });
   undoReview.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce({ cardId: "one" });
-  render(<StudySession mode="study" lessonTitle="Buổi 1" cards={[cards[0]]} backHref="/student" />);
+  render(<StudySession mode="study" lessonTitle="Buổi 1" cards={[cards[0]]} onExit={() => {}} />);
   fireEvent.click(screen.getByRole("button", { name: "Lật thẻ để xem đáp án" }));
   fireEvent.click(screen.getByRole("button", { name: /Đúng, phím 3/ }));
-  await screen.findByRole("heading", { name: "Đã học xong hôm nay." });
+  await screen.findByRole("heading", { name: "Đã hoàn thành phiên học." });
   await waitFor(() => expect(screen.getByRole("button", { name: "Hoàn tác thẻ cuối" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Hoàn tác thẻ cuối" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Không thể hoàn tác");

@@ -13,6 +13,8 @@ colors:
   wrong: "#d73b3e"
   unsure: "#a86600"
   correct: "#168a55"
+  correct-ink: "color-mix(in srgb, var(--correct) 80%, var(--ink))"
+  wrong-ink: "color-mix(in srgb, var(--wrong) 80%, var(--ink))"
   focus: "#245e9b"
 typography:
   display:
@@ -147,6 +149,7 @@ The palette resembles charcoal ink and white paper on a cool grey desk, with ver
 - **Answer Red** (`wrong`): Means an incorrect recall or error only.
 - **Uncertain Amber** (`unsure`): Means a difficult or uncertain recall only.
 - **Success Green** (`correct`): Means correct recall, completion, or published success only.
+- **Feedback Ink** (`correct-ink`, `wrong-ink`): Strengthens quiz feedback and result labels against the current paper or canvas; retain the base semantic colors for borders, icons, and tinted answer surfaces.
 
 ### Neutral
 
@@ -193,6 +196,8 @@ Kotoba uses a planner grid with generous breathing room. The landing surface is 
 
 Spacing follows an `8px`-based rhythm, most often `12`, `16`, `20`, `24`, `32`, `40`, and `48px`. Forms and metadata can be compact inside a generous outer composition. Teacher pages favor one dominant list plus a `360–390px` authoring rail rather than equal card grids. On narrow screens, columns stack, outer padding falls to `16–20px`, and study controls dock to the bottom edge for one-hand reach.
 
+Lesson overviews cap the vocabulary list at `1024px`. Repeated mode controls bracket the list, pairing horizontally from `640px` and stacking below it. Vocabulary rows use a `1:1.6` reading-to-meaning grid from the same breakpoint and a single column on mobile. A centered setup dialog temporarily takes focus; active flashcards and quiz questions then return to a single learning object.
+
 **The One Dominant Object Rule.** Each viewport has one clear working object—promise, list, form, or flashcard—and supporting regions must remain visually subordinate.
 
 ## Elevation & Depth
@@ -203,6 +208,7 @@ The system is flat by default and gains depth selectively. Dividers and tonal su
 
 - **Paper Lift** (`0 22px 55px rgba(49, 63, 77, 0.12)`): A soft ambient lift for objects that are handled or acted upon.
 - **Focus Ring** (`0 0 0 3px color-mix(in srgb, var(--focus) 45%, transparent)`): Keyboard focus on all interactive elements; fields use a quieter `20%` mix while focused.
+- **Modal Backdrop** (`rgba(16,23,31,.55)`): Dims the vocabulary overview behind the native setup dialog; the dialog uses Paper Lift in the browser's top layer.
 
 ### Named Rules
 
@@ -221,7 +227,7 @@ Components feel tactile but restrained: crisp labels, reachable targets, a soft 
 ### Buttons
 
 - **Shape:** Gently curved rectangle (`12px`) with a `44px` minimum touch target.
-- **Primary:** Kotoba Vermilion with white text, `0.7rem 1rem` padding, and weight `700`.
+- **Primary:** Kotoba Vermilion with white text in light mode and Mineral Canvas text in dark mode, `0.7rem 1rem` padding, and weight `700`. The dark-mode text preserves contrast against the lighter vermilion.
 - **Hover / Focus:** Deepen to Pressed Vermilion over `180ms`; use the blue focus ring for keyboard navigation and a `1px` downward press response.
 - **Secondary:** Bright Paper with Charcoal Ink, a Desk Line border, and weight `650`; do not tint it vermilion.
 
@@ -243,6 +249,7 @@ Components feel tactile but restrained: crisp labels, reachable targets, a soft 
 - **Style:** Bright Paper, `1px` Desk Line border, `12px` corners, and `0.8rem 0.9rem` padding.
 - **Focus:** Focus Blue border plus a soft `3px` blue ring.
 - **Error / Disabled:** Errors use Answer Red with explicit text; disabled actions retain their silhouette and fall to `35–60%` opacity.
+- **Study selects:** A `44px` minimum height, normalized native appearance, and a visible trailing chevron keep direction and scope controls consistent across browsers.
 
 ### Navigation
 
@@ -251,6 +258,18 @@ The desktop rail sits on Quiet Paper with a Desk Line boundary. Items are `44px`
 ### Study Card and Review Controls
 
 The study card is the signature object: a Bright Paper plane, `16px` corners, generous Paper Lift, and Japanese type at near-reading scale. It enters in `420ms`, flips around the Y axis in `620ms` with `cubic-bezier(.16, 1, .3, 1)`, and supports either face as the starting prompt. A compact direction selector and shuffle action sit above the card; shuffling reorders only the remaining cards. All four review controls stay fully visible on either face, with a status message when there is nothing to undo. Saving temporarily guards repeated actions without dimming the controls. Review actions are circular paper buttons labeled Hoàn tác, Sai, Chưa chắc, and Đúng; semantic color is reinforced by icon, text, and keyboard shortcut. Reduced-motion mode removes the flip and state travel without hiding content.
+
+### Vocabulary Rows and Mode Controls
+
+Vocabulary entries stay flat with dividing rules and `24–28px` vertical spacing. Kanji and reading form one group; Vietnamese meaning, Japanese example, and translation form the other. The same entry appears in the overview, quiz explanation, and final answer review. The two mode buttons use bordered Bright Paper surfaces with `16px` corners, an icon, a short description, and a quiet arrow; hover changes the border to vermilion without adding a shadow.
+
+### Study Setup Dialog
+
+Both modes share a centered native dialog with `16px` corners and a maximum width of `34rem`. Its width and maximum height leave `16px` clearance on each viewport edge. A scrollable form body sits between the fixed header and action footer, preserving access to Cancel and Start on short screens. Direction, student scope, count or all, and shuffle use the existing field language. Opening locks background scrolling and cycles Tab within the dialog; Escape, Cancel, and Close restore focus to the initiating mode button or lesson title. Entry uses a quiet `180ms` fade with `6px` travel, removed for reduced motion.
+
+### Multiple-Choice Question and Review
+
+One paper question leads above flat answer buttons with `12px` corners and a `64px` minimum height. Options stack on mobile and form two columns from `640px`. Selection locks the answer, reveals labeled semantic feedback and the full vocabulary entry, and exposes an explicit next action. The correct answer and a wrong selection use tinted surfaces, borders, and icons; feedback text uses Feedback Ink. Final results return to flat vocabulary rows with a score and answer labels. Focus moves to each new question or the results heading.
 
 ## Do's and Don'ts
 

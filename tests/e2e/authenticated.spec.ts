@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
+import { startFlashcards } from "./helpers/study";
 
 const enabled = process.env.RUN_AUTH_E2E === "1";
 test.skip(!enabled, "Requires the isolated local Supabase stack");
@@ -130,6 +131,9 @@ test("teacher, student and study surfaces render from authenticated data", async
   await expect(page.getByRole("link", { name: /1 thẻ đến hạn.*2 thẻ tất cả/ })).toBeVisible();
 
   await page.goto(`/study/${lessonId}`);
+  await expect(page.getByRole("heading", { name: "Từ vựng trong bài" })).toBeVisible();
+  await expect(page.getByText("食べる", { exact: true })).toBeVisible();
+  await startFlashcards(page);
   await expect(page.getByText("1 / 1", { exact: true })).toBeVisible();
   await expect(page.getByText("学ぶ", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Lật thẻ để xem đáp án" }).click();
@@ -163,6 +167,7 @@ test("teacher previews draft and published lessons without writing student progr
   await expect(page).toHaveURL(new RegExp(`/preview/${draftLessonId}$`));
   await expect(page.getByText("Xem thử · Không lưu kết quả")).toBeVisible();
   await expect(page.getByText("読む", { exact: true })).toBeVisible();
+  await startFlashcards(page);
   await expect(page.getByText("1 / 2", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Lật thẻ để xem đáp án" }).click();
   await expect(page.getByText("よむ", { exact: true })).toBeVisible();
@@ -210,7 +215,7 @@ test("teacher previews draft and published lessons without writing student progr
   await page.goto(`/teacher/classes/${classId}/lessons/${emptyLessonId}`);
   await expect(page.getByRole("link", { name: "Xem demo tiết học" })).toHaveCount(0);
   await page.goto(`/preview/${emptyLessonId}`);
-  await expect(page.getByRole("heading", { name: "Chưa có thẻ để xem thử" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Bài học chưa có từ vựng" })).toBeVisible();
 
   await page.context().clearCookies();
   await login(page, studentEmail);
@@ -220,5 +225,89 @@ test("teacher previews draft and published lessons without writing student progr
   await page.context().clearCookies();
   await login(page, otherTeacherEmail);
   await page.goto(`/preview/${draftLessonId}`);
+  await expect(page.getByRole("heading", { name: "Không tìm thấy trang" })).toBeVisible();
+});
+
+test("vocabulary, centered setup and scored practice work in both themes without changing review history", async ({ page }, testInfo) => {
+  const admin = createClient(apiUrl, secretKey, { auth: { persistSession: false } });
+  async function savedProgress() {
+    const [progress, logs] = await Promise.all([
+      admin.from("card_progress").select("*").eq("student_id", createdUsers[1]).in("card_id", cardIds).order("card_id"),
+      admin.from("review_logs").select("*").eq("student_id", createdUsers[1]).in("card_id", cardIds).order("id"),
+    ]);
+    if (progress.error || logs.error) throw progress.error ?? logs.error;
+    return { progress: progress.data, logs: logs.data };
+  }
+  await login(page, studentEmail);
+  const before = await savedProgress();
+  for (const theme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
+    await page.goto(`/study/${lessonId}`);
+    await expect(page.getByRole("heading", { name: "Từ vựng trong bài" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Lật thẻ để xem đáp án" })).toHaveCount(0);
+    await expect(page.getByText("学ぶ", { exact: true })).toBeVisible();
+    await expect(page.getByText("食べる", { exact: true })).toBeVisible();
+    const screenshot = (name: string) => page.screenshot({ path: `.impeccable/review/lesson-flow/${testInfo.project.name}-${theme}-${name}.png`, fullPage: true });
+    await screenshot("overview");
+
+    const bottomPicker = page.getByRole("region", { name: "Chế độ học cuối danh sách" });
+    const trigger = bottomPicker.getByRole("button", { name: "Trắc nghiệm" });
+    await trigger.click();
+    const dialog = page.getByRole("dialog", { name: "Trắc nghiệm" });
+    await expect(dialog).toBeVisible();
+    await expect(page.locator("html")).toHaveCSS("overflow", "hidden");
+    await dialog.getByLabel("Chiều học").selectOption("back-first");
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+    await expect(page.locator("html")).not.toHaveCSS("overflow", "hidden");
+
+    await page.getByRole("region", { name: "Chế độ học đầu danh sách" }).getByRole("button", { name: "Trắc nghiệm" }).click();
+    await expect(dialog.getByLabel("Chiều học")).toHaveValue("back-first");
+    await dialog.getByLabel("Chiều học").selectOption("front-first");
+    await dialog.getByLabel("Tráo thứ tự câu hỏi").uncheck();
+    for (const control of await dialog.getByRole("combobox").all()) {
+      expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    }
+    for (let i = 0; i < 12; i++) {
+      await page.keyboard.press("Tab");
+      expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+    }
+    const bounds = await dialog.boundingBox();
+    const viewport = page.viewportSize()!;
+    expect(bounds).not.toBeNull();
+    expect(Math.abs(bounds!.x + bounds!.width / 2 - viewport.width / 2)).toBeLessThan(2);
+    expect(Math.abs(bounds!.y + bounds!.height / 2 - viewport.height / 2)).toBeLessThan(2);
+    expect(bounds!.height).toBeLessThanOrEqual(viewport.height - 30);
+    await dialog.getByRole("heading").scrollIntoViewIfNeeded();
+    await screenshot("setup");
+    await dialog.getByRole("button", { name: "Bắt đầu" }).click();
+    await expect(page.getByRole("heading", { name: "学ぶ", exact: true })).toBeVisible();
+    await screenshot("quiz");
+    const options = page.getByRole("group", { name: "Các đáp án" });
+    await expect(options.getByRole("button")).toHaveCount(2);
+    await options.getByRole("button", { name: "học, học hỏi", exact: true }).click();
+    await expect(page.getByRole("status")).toHaveText("Chính xác!");
+    await expect(options.getByRole("button").first()).toHaveAttribute("aria-disabled", "true");
+    await screenshot("feedback");
+    await page.getByRole("button", { name: "Tiếp theo" }).click();
+    await options.getByRole("button", { name: "học, học hỏi", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("Chưa đúng.");
+    await page.getByRole("button", { name: "Xem kết quả" }).click();
+    await expect(page.getByText("1 / 2 câu đúng", { exact: true })).toBeVisible();
+    await screenshot("results");
+    await page.getByRole("button", { name: "Làm bài mới" }).click();
+    await expect(dialog.getByLabel("Tráo thứ tự câu hỏi")).not.toBeChecked();
+    await dialog.getByRole("button", { name: "Hủy" }).click();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await startFlashcards(page);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Từ vựng trong bài" })).toBeVisible();
+  }
+  expect(await savedProgress()).toEqual(before);
+
+  await page.context().clearCookies();
+  await login(page, studentEmail);
+  await page.goto(`/study/${draftLessonId}`);
   await expect(page.getByRole("heading", { name: "Không tìm thấy trang" })).toBeVisible();
 });

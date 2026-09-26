@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ArrowCounterClockwise, CaretDown, Check, QuestionMark, Shuffle, X } from "@phosphor-icons/react";
-import Link from "next/link";
 import { submitReview, undoReview } from "@/app/actions";
-import type { ReviewRating, StudyCard } from "@/lib/types";
+import type { ReviewRating, StudyCard, StudyDirection } from "@/lib/types";
 
 const actions = [
   { rating: null, label: "Hoàn tác", key: "U", Icon: ArrowCounterClockwise, tone: "text-muted" },
@@ -17,15 +16,16 @@ type StudySessionProps = {
   mode: "study" | "preview";
   lessonTitle: string;
   cards: StudyCard[];
-  backHref: string;
+  initialDirection?: StudyDirection;
+  onExit: () => void;
 };
 
-export function StudySession({ mode, lessonTitle, cards, backHref }: StudySessionProps) {
+export function StudySession({ mode, lessonTitle, cards, initialDirection = "front-first", onExit }: StudySessionProps) {
   // Saving a review refreshes the server's due-card list, not the active session's deck.
   const [sessionCards] = useState(cards);
   const [queue, setQueue] = useState(sessionCards);
-  const [backFirst, setBackFirst] = useState(false);
-  const [flipped, setFlipped] = useState(false);
+  const [backFirst, setBackFirst] = useState(initialDirection === "back-first");
+  const [flipped, setFlipped] = useState(initialDirection === "back-first");
   const [last, setLast] = useState<StudyCard | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -34,6 +34,10 @@ export function StudySession({ mode, lessonTitle, cards, backHref }: StudySessio
   const total = sessionCards.length;
   const current = queue[0];
   const completed = total - queue.length;
+  const heading = useRef<HTMLHeadingElement>(null);
+  const finished = !current;
+
+  useEffect(() => { heading.current?.focus({ preventScroll: true }); }, [finished]);
 
   const grade = useCallback((rating: ReviewRating) => {
     if (!current || pending) return;
@@ -130,15 +134,15 @@ export function StudySession({ mode, lessonTitle, cards, backHref }: StudySessio
     return (
       <div className="mx-auto flex min-h-[75dvh] max-w-2xl flex-col items-center justify-center text-center">
         <div className="grid size-20 place-items-center rounded-full bg-correct/10 text-correct"><Check size={38} weight="bold" /></div>
-        <h1 className="mt-7 text-4xl font-bold tracking-[-.035em]">{mode === "preview" ? "Đã xem hết thẻ." : "Đã học xong hôm nay."}</h1>
+        <h1 ref={heading} tabIndex={-1} className="mt-7 text-4xl font-bold tracking-[-.035em]">{mode === "preview" ? "Đã xem hết thẻ." : "Đã hoàn thành phiên học."}</h1>
         <p className="mt-3 max-w-md text-lg leading-relaxed text-muted">
-          {mode === "preview" ? "Bạn có thể xem lại từ đầu hoặc quay lại chỉnh sửa bài học." : "Kotoba đã lên lịch lần gặp tiếp theo cho từng thẻ dựa trên câu trả lời của bạn."}
+          {mode === "preview" ? "Bạn có thể xem lại từ đầu hoặc quay lại danh sách từ vựng." : "Kotoba đã cập nhật lịch ôn cho các thẻ trong phiên này dựa trên câu trả lời của bạn."}
         </p>
         {error && <p role="alert" className="mt-4 text-sm font-semibold text-wrong">{error}</p>}
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           {last ? <button type="button" onClick={undo} disabled={pending} className="button-secondary">Hoàn tác thẻ cuối</button> : null}
           {mode === "preview" ? <button type="button" onClick={restart} className="button-primary">Xem lại từ đầu</button> : null}
-          <Link href={backHref} className={mode === "preview" ? "button-secondary" : "button-primary"}>{mode === "preview" ? "Quay lại bài học" : "Trở về lớp"}</Link>
+          <button type="button" onClick={onExit} disabled={pending} className={mode === "preview" ? "button-secondary" : "button-primary"}>Quay lại bài học</button>
         </div>
       </div>
     );
@@ -148,8 +152,8 @@ export function StudySession({ mode, lessonTitle, cards, backHref }: StudySessio
     <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-4xl flex-col pb-28 md:pb-8">
       <header className="flex items-center justify-between gap-5">
         <div className="min-w-0">
-          <Link href={backHref} className="quiet-link text-sm">{mode === "preview" ? "Quay lại bài học" : "Thoát phiên học"}</Link>
-          <h1 className="mt-2 break-words text-lg font-bold">{lessonTitle}</h1>
+          <button type="button" onClick={onExit} disabled={pending} className="quiet-link min-h-11 text-sm">Quay lại bài học</button>
+          <h1 ref={heading} tabIndex={-1} className="mt-2 break-words text-lg font-bold">{lessonTitle}</h1>
           {mode === "preview" ? <p className="mt-1 text-sm font-semibold text-muted">Xem thử · Không lưu kết quả</p> : null}
         </div>
         <div className="shrink-0 text-right">

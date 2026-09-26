@@ -1,6 +1,29 @@
 import { notFound } from "next/navigation";
-import { StudySession } from "@/components/study-session";
+import { LessonStudy } from "@/components/lesson-study";
 import { requireProfile } from "@/lib/auth";
-import type { StudyCard } from "@/lib/types";
 
-export default async function StudyPage({params}:PageProps<"/study/[lessonId]">){const{lessonId}=await params;const{profile,supabase}=await requireProfile("student");const{data:lesson}=await supabase.from("lessons").select("id,title,class_id,status").eq("id",lessonId).eq("status","published").single();if(!lesson)notFound();const{data:cards}=await supabase.from("cards").select("id,kanji,hiragana,meaning_vi,example_ja,example_vi,position").eq("lesson_id",lessonId).order("position");const ids=(cards??[]).map(c=>c.id);const{data:progress}=ids.length?await supabase.from("card_progress").select("card_id,due_at").eq("student_id",profile.id).in("card_id",ids):{data:[]};const due=new Map((progress??[]).map(p=>[p.card_id,new Date(p.due_at)]));const now=new Date();const queue=(cards??[]).filter(c=>!due.has(c.id)||(due.get(c.id) as Date)<=now) as StudyCard[];return <main className="min-h-[100dvh] px-4 py-5 sm:px-7"><StudySession mode="study" lessonTitle={lesson.title} cards={queue} backHref="/student"/></main>}
+export default async function StudyPage({ params }: PageProps<"/study/[lessonId]">) {
+  const { lessonId } = await params;
+  const { profile, supabase } = await requireProfile("student");
+  const { data: lesson, error: lessonError } = await supabase.from("lessons")
+    .select("id,title,description,class_id,status").eq("id", lessonId).eq("status", "published").single();
+  if (lessonError && lessonError.code !== "PGRST116") throw new Error("Không thể tải bài học.");
+  if (!lesson) notFound();
+
+  const { data: cards, error: cardsError } = await supabase.from("cards")
+    .select("id,kanji,hiragana,meaning_vi,example_ja,example_vi,position")
+    .eq("lesson_id", lessonId).order("position").order("created_at");
+  if (cardsError) throw new Error("Không thể tải từ vựng.");
+  const ids = (cards ?? []).map((card) => card.id);
+  const { data: progress, error: progressError } = ids.length
+    ? await supabase.from("card_progress").select("card_id,due_at").eq("student_id", profile.id).in("card_id", ids)
+    : { data: [], error: null };
+  if (progressError) throw new Error("Không thể tải lịch ôn.");
+  const dueDates = new Map((progress ?? []).map((item) => [item.card_id, new Date(item.due_at).getTime()]));
+  const now = new Date().getTime();
+  const dueCardIds = ids.filter((id) => !dueDates.has(id) || dueDates.get(id)! <= now);
+
+  return <main className="min-h-[100dvh] px-4 py-5 sm:px-7">
+    <LessonStudy key={lessonId} mode="study" lessonTitle={lesson.title} description={lesson.description} cards={cards ?? []} dueCardIds={dueCardIds} backHref="/student" />
+  </main>;
+}

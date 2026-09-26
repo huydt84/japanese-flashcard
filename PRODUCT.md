@@ -39,6 +39,8 @@ The teaching workflow and the learning loop live together: teacher-authored kanj
 - Teachers create classes, draft/publish lessons, manage cards and invite students by email.
 - Students accept or decline invitations, join classes and study published lessons.
 - Cards contain kanji, hiragana, Vietnamese meaning, a Japanese example and its Vietnamese translation.
+- Lessons open with their full vocabulary list before learners choose flashcards or multiple choice. Both modes support direction, due/unseen or all vocabulary, count or all eligible items, and shuffle; teacher preview uses all vocabulary and saves no progress.
+- Multiple choice provides immediate feedback, vocabulary explanations, and a final score with answer review. It stores no quiz history and does not change FSRS scheduling.
 - Review ratings are Again, Hard and Good, plus an immediate undo action; scheduling uses FSRS with 0.9 requested retention.
 - Teachers receive basic progress metrics, not advanced analytics.
 - MVP excludes passwords, audio, outbound email, chat, general-purpose admin tooling and self-service account deletion.
