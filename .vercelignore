@@ -1,0 +1,24 @@
+# Runtime variables are synced explicitly by scripts/sync-vercel-env.mjs.
+.env
+.env.*
+!.env.template
+*.pem
+
+# Vercel builds from source; local build caches must never be uploaded.
+node_modules
+.next
+.next-*
+out
+build
+*.tsbuildinfo
+
+# Local test results, visual reviews, and Supabase CLI state.
+coverage
+test-results
+playwright-report
+.impeccable
+supabase/.temp
+supabase/.branches
+
+.DS_Store
+*-debug.log*

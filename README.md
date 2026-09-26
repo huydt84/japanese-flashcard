@@ -9,7 +9,7 @@ Kotoba là web app học từ vựng tiếng Nhật dành cho giáo viên và h�
 - `ts-fsrs` cho spaced repetition
 - Vitest, Playwright và Vercel
 
-Node.js 20.9 trở lên và pnpm 12 được khuyến nghị.
+Node.js 20.9 trở lên và pnpm 11.25.0 được khuyến nghị. Phiên bản pnpm được cố định trong `packageManager` và `engines.pnpm` để giữ lockfile tương thích với Vercel CLI.
 
 ## Chạy local
 
@@ -105,6 +105,14 @@ pnpm run deploy:prod
 ```
 
 `deploy:prod` đọc `.env`, kiểm tra toàn bộ contract, áp dụng migration production, đồng bộ duy nhất các dòng public được đánh dấu `@vercel` trong `.env.template` lên Vercel Production và Preview, rồi mới deploy. Lệnh sẽ dừng ngay nếu thiếu credential, project ref không khớp URL, migration lỗi hoặc URL production trỏ vào localhost. Các biến được đánh dấu `@supabase-cli` không bao giờ được gửi lên Vercel. Personal access token nên có hạn dùng và phải được xoay trong `.env` trước khi hết hạn.
+
+`.vercelignore` loại bỏ `.env`, cache build local (`.next`, `.next-*`), báo cáo kiểm thử và trạng thái Supabase CLI khỏi gói upload. Vercel CLI không dùng `.gitignore` để loại bỏ các tệp này. Không bỏ qua `pnpm-lock.yaml`: Vercel cần lockfile để nhận diện package manager và cài đúng dependency. Giữ pnpm 11.25.0 khi dùng Vercel CLI 58.4.4; lockfile nhiều YAML document của pnpm 12 khiến CLI này báo lỗi parse và nhận diện sai package manager.
+
+Để xem trước các tệp sẽ upload mà không deploy hoặc thay đổi database/environment:
+
+```bash
+pnpm exec vercel deploy --dry --json
+```
 
 Sau lần deploy đầu, cập nhật Site URL/Redirect URLs trong Supabase và Authorized origins/redirects trong Google Cloud bằng domain production, rồi đăng nhập thử trên domain thật.
 
