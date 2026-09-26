@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowUp, CheckCircle, FileXls, PencilSimple, Plus, Trash } from "@phosphor-icons/react/dist/ssr";
+import { ArrowDown, ArrowLeft, ArrowUp, CheckCircle, Eye, FileXls, PencilSimple, Plus, Trash } from "@phosphor-icons/react/dist/ssr";
 import { addCard, deleteCard, importCards, moveCard, publishLesson, updateCard, updateLessonTitle } from "@/app/actions";
 import { ActionForm } from "@/components/action-form";
 import { XlsxImporter } from "@/components/xlsx-importer";
@@ -35,9 +35,16 @@ export default async function LessonEditor({ params }: PageProps<"/teacher/class
           </div>
           <p className="mt-3 max-w-3xl break-words text-lg text-muted">{lesson.description || "Thêm từng thẻ hoặc nhập danh sách từ tệp Excel."}</p>
         </div>
-        {lesson.status !== "published" ? (
-          <ActionForm action={publishLesson.bind(null, lessonId, classId)} className="space-y-2 sm:text-right" submitClassName="button-primary w-full sm:w-auto" submitLabel="Xuất bản" pendingLabel="Đang xuất bản" icon={<CheckCircle size={20} aria-hidden="true" />} />
-        ) : null}
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-start">
+          {cards?.length ? (
+            <Link href={`/preview/${lessonId}`} className="button-secondary gap-2 whitespace-nowrap">
+              <Eye size={20} aria-hidden="true" />Xem demo tiết học
+            </Link>
+          ) : null}
+          {lesson.status !== "published" ? (
+            <ActionForm action={publishLesson.bind(null, lessonId, classId)} className="space-y-2 sm:text-right" submitClassName="button-primary w-full whitespace-nowrap sm:w-auto" submitLabel="Xuất bản" pendingLabel="Đang xuất bản" icon={<CheckCircle size={20} aria-hidden="true" />} />
+          ) : null}
+        </div>
       </header>
 
       <div className="mt-10 grid gap-10 xl:grid-cols-[1fr_390px]">
