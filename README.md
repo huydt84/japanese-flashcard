@@ -82,6 +82,25 @@ Trang tính đầu tiên phải có đúng năm cột A–E. Hàng 1 là tiêu �
 
 Điền đủ cả năm ô bằng văn bản. Không dùng công thức, số, ngày hay cột bổ sung. Hàng trống được bỏ qua. Mỗi tệp chứa tối đa 500 thẻ và có kích thước tối đa 750 KB. Nếu một hàng có lỗi, hệ thống sẽ báo số hàng và không nhập thẻ nào trong tệp.
 
+## Biểu tượng và ảnh chia sẻ
+
+Các tài nguyên thương hiệu được commit trong `src/app`:
+
+- `favicon.ico`: biểu tượng tab trình duyệt ở nhiều kích thước.
+- `icon.png`: biểu tượng PNG 192 × 192.
+- `apple-icon.png`: biểu tượng Apple 180 × 180.
+- `opengraph-image.png`: ảnh xem trước khi chia sẻ liên kết, kích thước 1200 × 630. Nội dung thay thế trong `opengraph-image.alt.txt` là “Kotoba —  Học từ vựng tiếng Nhật bằng flashcard.”
+
+`src/app/layout.tsx` khai báo metadata tĩnh cho tiêu đề, mô tả, Open Graph và Twitter. `metadataBase` lấy URL qua `siteUrl()`, ưu tiên `NEXT_PUBLIC_SITE_URL`; đặt biến này thành domain production để liên kết ảnh chia sẻ có địa chỉ tuyệt đối đúng.
+
+Để tạo lại các ảnh sau khi sửa thiết kế trong script:
+
+```bash
+node scripts/generate-brand-assets.mjs
+```
+
+Lệnh cần Playwright Chromium (`pnpm exec playwright install chromium`) và kết nối internet tới Google Fonts. Commit các ảnh được tạo lại; production phục vụ trực tiếp các tệp tĩnh này, không chạy script hay tải font để tạo ảnh.
+
 ## Kiểm tra chất lượng
 
 ```bash
