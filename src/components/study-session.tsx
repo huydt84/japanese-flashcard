@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import { ArrowCounterClockwise, Check, QuestionMark, X } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, CaretDown, Check, QuestionMark, Shuffle, X } from "@phosphor-icons/react";
 import Link from "next/link";
 import { submitReview, undoReview } from "@/app/actions";
 import type { ReviewRating, StudyCard } from "@/lib/types";
@@ -21,24 +21,29 @@ type StudySessionProps = {
 };
 
 export function StudySession({ mode, lessonTitle, cards, backHref }: StudySessionProps) {
-  const [queue, setQueue] = useState(cards);
+  // Saving a review refreshes the server's due-card list, not the active session's deck.
+  const [sessionCards] = useState(cards);
+  const [queue, setQueue] = useState(sessionCards);
+  const [backFirst, setBackFirst] = useState(false);
   const [flipped, setFlipped] = useState(false);
   const [last, setLast] = useState<StudyCard | null>(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [pending, startTransition] = useTransition();
   const sessionId = useMemo(() => mode === "study" ? crypto.randomUUID() : null, [mode]);
-  const total = cards.length;
+  const total = sessionCards.length;
   const current = queue[0];
   const completed = total - queue.length;
 
   const grade = useCallback((rating: ReviewRating) => {
-    if (!current || !flipped || pending) return;
+    if (!current || pending) return;
     setError("");
+    setNotice("");
 
     if (mode === "preview") {
       setLast(current);
       setQueue((items) => items.slice(1));
-      setFlipped(false);
+      setFlipped(backFirst);
       return;
     }
 
@@ -47,21 +52,26 @@ export function StudySession({ mode, lessonTitle, cards, backHref }: StudySessio
         await submitReview(current.id, sessionId!, rating);
         setLast(current);
         setQueue((items) => items.slice(1));
-        setFlipped(false);
+        setFlipped(backFirst);
       } catch {
         setError("Không thể lưu câu trả lời. Hãy kiểm tra kết nối và thử lại.");
       }
     });
-  }, [current, flipped, mode, pending, sessionId]);
+  }, [backFirst, current, mode, pending, sessionId]);
 
   const undo = useCallback(() => {
-    if (!last || pending) return;
+    if (pending) return;
     setError("");
+    if (!last) {
+      setNotice("Chưa có câu trả lời để hoàn tác.");
+      return;
+    }
+    setNotice("");
 
     if (mode === "preview") {
       setQueue((items) => [last, ...items]);
       setLast(null);
-      setFlipped(true);
+      setFlipped(!backFirst);
       return;
     }
 
@@ -70,24 +80,39 @@ export function StudySession({ mode, lessonTitle, cards, backHref }: StudySessio
         await undoReview(sessionId!);
         setQueue((items) => [last, ...items]);
         setLast(null);
-        setFlipped(true);
+        setFlipped(!backFirst);
       } catch {
         setError("Không thể hoàn tác câu trả lời gần nhất.");
       }
     });
-  }, [last, mode, pending, sessionId]);
+  }, [backFirst, last, mode, pending, sessionId]);
+
+  const shuffle = () => {
+    if (pending || queue.length < 2) return;
+    const shuffled = [...queue];
+    for (let index = shuffled.length - 1; index > 0; index--) {
+      const other = Math.floor(Math.random() * (index + 1));
+      [shuffled[index], shuffled[other]] = [shuffled[other], shuffled[index]];
+    }
+    setQueue(shuffled);
+    setFlipped(backFirst);
+    setError("");
+    setNotice(`Đã tráo ${shuffled.length} thẻ còn lại.`);
+  };
 
   const restart = () => {
-    setQueue(cards);
-    setFlipped(false);
+    setQueue(sessionCards);
+    setFlipped(backFirst);
     setLast(null);
     setError("");
+    setNotice("");
   };
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       const target = event.target;
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || (target instanceof HTMLElement && target.isContentEditable)) return;
+      if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable)) return;
       if (event.code === "Space" && current && !(target instanceof HTMLElement && target.closest("button, a"))) {
         event.preventDefault();
         setFlipped((value) => !value);
@@ -134,18 +159,50 @@ export function StudySession({ mode, lessonTitle, cards, backHref }: StudySessio
           </div>
         </div>
       </header>
+      <div className="mt-6 flex flex-wrap items-end justify-between gap-3">
+        <label className="min-w-0 flex-1 sm:flex-none">
+          <span className="label">Chiều học</span>
+          <span className="relative block">
+            <select
+              value={backFirst ? "back-first" : "front-first"}
+              onChange={(event) => {
+                const nextBackFirst = event.target.value === "back-first";
+                setBackFirst(nextBackFirst);
+                setFlipped(nextBackFirst);
+                setNotice("");
+              }}
+              disabled={pending}
+              className="field study-direction min-h-11 text-sm font-semibold"
+            >
+              <option value="front-first">Mặt trước → Mặt sau</option>
+              <option value="back-first">Mặt sau → Mặt trước</option>
+            </select>
+            <CaretDown size={16} weight="bold" aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
+          </span>
+        </label>
+        <button
+          type="button"
+          onClick={shuffle}
+          disabled={pending || queue.length < 2}
+          className="button-secondary shrink-0 text-sm"
+          title={queue.length < 2 ? "Cần ít nhất 2 thẻ còn lại để tráo" : "Tráo ngẫu nhiên các thẻ còn lại"}
+        >
+          <Shuffle size={18} weight="bold" aria-hidden="true" />
+          Tráo thẻ
+        </button>
+      </div>
       <div className="flex flex-1 items-center justify-center py-8">
         <div
           key={current.id}
           className="flip-stage paper-shadow card-enter relative min-h-[430px] w-full max-w-3xl rounded-2xl bg-surface-strong text-left sm:min-h-[520px]"
         >
           <span className={`flip-plane block min-h-[430px] sm:min-h-[520px] ${flipped ? "is-flipped" : ""}`}>
-            <span className="flip-face flip-front p-7 sm:p-12">
+            <span role="group" aria-label="Mặt trước" aria-hidden={flipped} className="flip-face flip-front p-7 sm:p-12">
               <span className="text-sm font-semibold text-muted">Nhấn Space hoặc chạm để lật</span>
               <span className="font-jp break-words text-center text-[clamp(5rem,16vw,9rem)] font-semibold leading-none tracking-[-.03em]">{current.kanji}</span>
               <span className="text-right text-xs font-bold uppercase tracking-[.08em] text-muted">Kanji</span>
             </span>
-            <span className="flip-face flip-back p-7 sm:p-12">
+            <span role="group" aria-label="Mặt sau" aria-hidden={!flipped} className="flip-face flip-back p-7 sm:p-12">
               <span className="text-sm font-semibold text-muted">Mặt sau</span>
               <span className="space-y-8">
                 <span className="block">
@@ -169,15 +226,16 @@ export function StudySession({ mode, lessonTitle, cards, backHref }: StudySessio
         </div>
       </div>
       {error && <p role="alert" className="mb-4 text-center text-sm font-semibold text-wrong">{error}</p>}
-      <div className={`answer-controls fixed inset-x-0 bottom-0 z-20 border-t border-line bg-canvas/95 px-3 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm md:static md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none ${flipped ? "is-ready" : ""}`}>
+      <p role="status" className="mb-4 min-h-5 text-center text-sm text-muted">{pending ? "Đang lưu thay đổi…" : notice}</p>
+      <div className="answer-controls fixed inset-x-0 bottom-0 z-20 border-t border-line bg-canvas/95 px-3 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm md:static md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
         <div className="mx-auto grid max-w-xl grid-cols-4 gap-2 sm:gap-5">
           {actions.map(({ rating, label, key, Icon, tone }) => (
             <button
               key={label}
               type="button"
               onClick={() => rating ? grade(rating) : undo()}
-              disabled={pending || (rating ? !flipped : !last)}
-              className="group flex flex-col items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-35"
+              aria-disabled={pending}
+              className="group flex cursor-pointer flex-col items-center gap-1.5 aria-disabled:cursor-wait"
               aria-label={`${label}, phím ${key}`}
             >
               <span className={`grid size-14 place-items-center rounded-full bg-surface-strong paper-shadow transition-transform group-hover:-translate-y-1 sm:size-18 ${tone}`}><Icon size={28} weight="bold" /></span>

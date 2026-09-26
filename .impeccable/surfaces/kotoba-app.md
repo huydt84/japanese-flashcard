@@ -12,6 +12,6 @@ Mode: Operate. Teachers author and assign vocabulary; students accept invitation
 
 **FIRST VIEWPORT:** A slim brand rail frames a dominant live flashcard. On public entry, explanation sits left and the card sits right; inside study, the card centers at near-reading scale with four circular controls directly below.
 
-**FORM:** Modern Japanese study planner grid, third in the grounded list; seed `c145e437`. Signature interaction: the card turns as one physical plane, then answer controls enter as the next deliberate state.
+**FORM:** Modern Japanese study planner grid, third in the grounded list; seed `c145e437`. Signature interaction: the card turns as one physical plane in either study direction, with answer controls always visible and available on either face.
 
 **FINISH:** unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

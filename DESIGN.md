@@ -250,7 +250,7 @@ The desktop rail sits on Quiet Paper with a Desk Line boundary. Items are `44px`
 
 ### Study Card and Review Controls
 
-The study card is the signature object: a Bright Paper plane, `16px` corners, generous Paper Lift, and Japanese type at near-reading scale. It enters in `420ms`, flips around the Y axis in `620ms` with `cubic-bezier(.16, 1, .3, 1)`, and exposes the answer controls only after the reverse face is available. Review actions are circular paper buttons labeled Hoàn tác, Sai, Chưa chắc, and Đúng; semantic color is reinforced by icon, text, and keyboard shortcut. Reduced-motion mode removes the flip and state travel without hiding content.
+The study card is the signature object: a Bright Paper plane, `16px` corners, generous Paper Lift, and Japanese type at near-reading scale. It enters in `420ms`, flips around the Y axis in `620ms` with `cubic-bezier(.16, 1, .3, 1)`, and supports either face as the starting prompt. A compact direction selector and shuffle action sit above the card; shuffling reorders only the remaining cards. All four review controls stay fully visible on either face, with a status message when there is nothing to undo. Saving temporarily guards repeated actions without dimming the controls. Review actions are circular paper buttons labeled Hoàn tác, Sai, Chưa chắc, and Đúng; semantic color is reinforced by icon, text, and keyboard shortcut. Reduced-motion mode removes the flip and state travel without hiding content.
 
 ## Do's and Don'ts
 

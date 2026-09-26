@@ -236,19 +236,20 @@ test("a known student can be invited again and a revoked invitation clears the u
   await openInvitation(student, "Lớp mời tiếp");
   teacher.once("dialog", (dialog) => dialog.accept());
   await teacher.getByRole("button", { name: "Thu hồi", exact: true }).click();
-  await expect(teacher.getByRole("button", { name: "Thu hồi", exact: true })).toHaveCount(0);
+  await expect(teacher.getByRole("button", { name: /^(Thu hồi|Đang thu hồi)$/ })).toHaveCount(0);
   await student.reload();
   await expect(student.getByRole("heading", { name: "Không có thông báo mới" })).toBeVisible();
   await expect(student.getByRole("link", { name: /Thông báo/ })).not.toHaveAccessibleName(/chưa đọc/);
 });
 
-test("undoing a review removes it from the teacher's progress report", async ({ actors }) => {
+test("reverse study saves ratings from either face and undo after shuffling updates the teacher's report", async ({ actors }) => {
   const { teacher, student, studentEmail } = actors;
   const className = "Lớp ôn tập N5";
   const lessonTitle = "Bài học hoàn tác";
   const { classPath } = await createClassAndLesson(teacher, className, lessonTitle);
   await addCard(teacher, { kanji: "聞く", hiragana: "きく", meaning: "nghe", exampleJa: "音楽を聞きます。", exampleVi: "Tôi nghe nhạc." });
   await addCard(teacher, { kanji: "話す", hiragana: "はなす", meaning: "nói", exampleJa: "日本語を話します。", exampleVi: "Tôi nói tiếng Nhật." });
+  await addCard(teacher, { kanji: "読む", hiragana: "よむ", meaning: "đọc", exampleJa: "本を読みます。", exampleVi: "Tôi đọc sách." });
   await teacher.getByRole("button", { name: "Xuất bản", exact: true }).click();
   await expect(teacher.getByText("Đã xuất bản", { exact: true })).toBeVisible();
   await sendInvitation(teacher, classPath, studentEmail);
@@ -258,19 +259,29 @@ test("undoing a review removes it from the teacher's progress report", async ({ 
   await student.goto("/student");
   await student.getByRole("link", { name: new RegExp(lessonTitle) }).click();
 
-  await student.getByRole("button", { name: "Lật thẻ để xem đáp án" }).click();
-  await student.getByRole("button", { name: /Đúng, phím 3/ }).click();
-  await expect(student.getByText("話す", { exact: true })).toBeVisible();
-  await student.getByRole("button", { name: /Hoàn tác, phím U/ }).click();
+  await student.getByRole("combobox", { name: "Chiều học" }).selectOption("back-first");
   await expect(student.getByText("きく", { exact: true })).toBeVisible();
+  await student.getByRole("button", { name: "Xem mặt kanji" }).click();
+  await expect(student.getByText("聞く", { exact: true })).toBeVisible();
+  await student.getByRole("button", { name: /Đúng, phím 3/ }).click();
+  await expect(student.getByText("はなす", { exact: true })).toBeVisible();
+  await expect(student.getByText("2 / 3", { exact: true })).toBeVisible();
+  await student.getByRole("button", { name: "Tráo thẻ" }).click();
+  await expect(student.getByRole("status")).toHaveText("Đã tráo 2 thẻ còn lại.");
+  await student.getByRole("button", { name: /Hoàn tác, phím U/ }).click();
+  await expect(student.getByText("聞く", { exact: true })).toBeVisible();
+  await expect(student.getByText("1 / 3", { exact: true })).toBeVisible();
   await teacher.goto(classPath);
   const progress = teacher.getByRole("row").filter({ hasText: studentEmail });
-  await expect(progress.getByRole("cell").nth(1)).toHaveText("0/2");
+  await expect(progress.getByRole("cell").nth(1)).toHaveText("0/3");
   await expect(progress.getByRole("cell").nth(3)).toHaveText("—");
 
+  await student.getByRole("button", { name: "Lật thẻ để xem đáp án" }).click();
+  await expect(student.getByText("きく", { exact: true })).toBeVisible();
   await student.getByRole("button", { name: /Đúng, phím 3/ }).click();
-  await expect(student.getByText("話す", { exact: true })).toBeVisible();
+  await expect(student.getByText("2 / 3", { exact: true })).toBeVisible();
+  await expect(student.getByRole("group", { name: "Mặt sau" })).toBeVisible();
   await teacher.reload();
-  await expect(progress.getByRole("cell").nth(1)).toHaveText("1/2");
+  await expect(progress.getByRole("cell").nth(1)).toHaveText("1/3");
   await expect(progress.getByRole("cell").nth(3)).toHaveText("100%");
 });

@@ -16,7 +16,7 @@ async function render(html, width, height) {
   await page.evaluate(async () => {
     await document.fonts.ready;
     const japanese = await document.fonts.load('700 32px "Noto Sans JP"', "語学ぶまなぶ");
-    const latin = await document.fonts.load('700 32px Geist', "");
+    const latin = await document.fonts.load('700 32px Geist', "Học từ vựng tiếng Nhật.");
     if (!japanese.length || !latin.length) throw new Error("Brand fonts did not load.");
   });
   return page.screenshot({ omitBackground: true });
@@ -75,8 +75,8 @@ try {
     .meaning { margin-top: 26px; padding-top: 22px; border-top: 1px solid #d8dde2; font-size: 27px; font-weight: 600; text-align: center; }
     </style>
     <div class="brand"><span class="mark" lang="ja">語</span>Kotoba</div>
-    <h1>Dạy một lần.<br><span>Nhớ lâu hơn.</span></h1>
-    <p class="description">Học từ vựng tiếng Nhật<br>bằng flashcard.</p>
+    <h1>Học từ vựng<br><span>tiếng Nhật.</span></h1>
+    <p class="description">Tạo bài học và ôn tập<br>bằng flashcard.</p>
     <div class="footer">Học đều, nhớ lâu.</div>
     <div class="card"><div class="label">日本語 · Tiếng Nhật</div><div class="kanji" lang="ja">学ぶ</div><div class="reading" lang="ja">まなぶ</div><div class="meaning">học, học hỏi</div></div>`, 1200, 630);
   await writeFile(`${output}opengraph-image.png`, preview);

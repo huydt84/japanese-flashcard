@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/browser";
 
 export function GoogleSignIn({ configured }: { configured: boolean }) {
@@ -36,8 +37,16 @@ export function GoogleSignIn({ configured }: { configured: boolean }) {
         disabled={loading}
         className="button-primary w-full sm:w-auto disabled:cursor-wait disabled:opacity-60"
       >
-        <span className="grid size-5 place-items-center rounded-full bg-white font-bold text-[#326bc5]" aria-hidden="true">
-          G
+        <span className="grid size-7 shrink-0 place-items-center rounded-full bg-white" aria-hidden="true">
+          {/* Official gradient logo: https://developers.google.com/identity/branding-guidelines */}
+          <Image
+            src="/google-g.png"
+            alt=""
+            width={200}
+            height={204}
+            className="h-5 w-auto"
+            unoptimized
+          />
         </span>
         {loading ? "Đang chuyển hướng…" : "Tiếp tục với Google"}
       </button>
