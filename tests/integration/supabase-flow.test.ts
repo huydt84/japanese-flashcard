@@ -21,7 +21,6 @@ run("authenticated teacher-to-student flow and RLS", () => {
   let student: SupabaseClient;
   let outsider: SupabaseClient;
   let developer: SupabaseClient;
-  let classId = "";
   let cardId = "";
 
   beforeAll(async () => {
@@ -53,7 +52,8 @@ run("authenticated teacher-to-student flow and RLS", () => {
     const { data: klass, error: classError } = await teacher.from("classes").insert({ teacher_id: teacherId, name: "N5 buổi sáng" }).select("id").single();
     expect(classError).toBeNull();
     if (!klass) throw classError ?? new Error("Không tạo được lớp kiểm thử");
-    classId = klass.id;
+    const classId = klass.id;
+    expect((await outsider.from("classes").select("id").eq("id", classId)).data).toEqual([]);
     const { data: lesson, error: lessonError } = await teacher.from("lessons").insert({ class_id: classId, title: "Động từ mỗi ngày" }).select("id").single();
     if (lessonError || !lesson) throw lessonError ?? new Error("Không tạo được bài học kiểm thử");
     const { data: card, error: cardError } = await teacher.from("cards").insert({ lesson_id: lesson.id, kanji: "学ぶ", hiragana: "まなぶ", meaning_vi: "học", example_ja: "毎日学びます。", example_vi: "Tôi học mỗi ngày." }).select("id").single();
@@ -81,8 +81,7 @@ run("authenticated teacher-to-student flow and RLS", () => {
     expect((await student.from("review_logs").select("undone_at").eq("card_id", cardId).single()).data?.undone_at).toBeTruthy();
   });
 
-  it("isolates another teacher and keeps the selected role immutable", async () => {
-    expect((await outsider.from("classes").select("id").eq("id", classId)).data).toEqual([]);
+  it("keeps the selected role immutable", async () => {
     expect((await teacher.rpc("set_my_role", { chosen_role: "student" })).error).toBeTruthy();
     expect((await teacher.from("profiles").update({ role: "student" }).eq("id", userIds[0]).select("role")).data).toEqual([]);
     expect((await teacher.from("profiles").select("role").eq("id", userIds[0]).single()).data?.role).toBe("teacher");
@@ -92,9 +91,12 @@ run("authenticated teacher-to-student flow and RLS", () => {
     const developerId = userIds[3];
     expect((await developer.from("classes").insert({ teacher_id: developerId, name: "Không được tạo" })).error).toBeTruthy();
     expect((await developer.rpc("set_admin_mode", { selected_mode: "teacher" })).error).toBeNull();
-    expect((await developer.from("classes").insert({ teacher_id: developerId, name: "Lớp debug" })).error).toBeNull();
-    expect((await developer.from("class_memberships").select("class_id").eq("student_id", developerId)).data).toEqual([]);
+    const { data: ownClass, error: classError } = await developer.from("classes").insert({ teacher_id: developerId, name: "Lớp debug" }).select("id").single();
+    expect(classError).toBeNull();
+    if (!ownClass) throw classError ?? new Error("Không tạo được lớp admin kiểm thử");
+    expect((await developer.from("classes").select("id").eq("id", ownClass.id).single()).data?.id).toBe(ownClass.id);
     expect((await developer.rpc("set_admin_mode", { selected_mode: "student" })).error).toBeNull();
+    expect((await developer.from("classes").select("id").eq("id", ownClass.id)).data).toEqual([]);
     expect((await developer.from("classes").insert({ teacher_id: developerId, name: "Không được tạo nữa" })).error).toBeTruthy();
   });
 });

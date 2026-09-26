@@ -8,7 +8,7 @@ export const scheduler = fsrs({
   relearning_steps: ["10m"],
 });
 
-export const ratingMap: Record<ReviewRating, Grade> = {
+const ratingMap: Record<ReviewRating, Grade> = {
   again: Rating.Again,
   hard: Rating.Hard,
   good: Rating.Good,

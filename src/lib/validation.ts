@@ -21,7 +21,3 @@ export const inviteSchema = z.object({
   email: z.string().trim().toLowerCase().email("Email không hợp lệ").max(254),
 });
 
-export function normalizeEmail(value: string) {
-  return value.trim().toLocaleLowerCase("en-US");
-}
-

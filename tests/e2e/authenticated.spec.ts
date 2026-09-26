@@ -79,6 +79,13 @@ test("teacher, student and study surfaces render from authenticated data", async
   await expect(page.getByRole("button", { name: "Lên" }).first()).toBeVisible();
   await page.screenshot({ path: `.impeccable/review/editor${suffix}.png`, fullPage: true });
 
+  await page.getByRole("button", { name: "Đổi tên buổi học: Động từ mỗi ngày" }).click();
+  await page.getByRole("textbox", { name: "Tên buổi học" }).fill("Động từ N5");
+  await page.getByRole("button", { name: "Lưu", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Động từ N5" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Đổi tên buổi học: Động từ N5" })).toBeVisible();
+
   const authoring = page.getByRole("complementary");
   await authoring.getByLabel("Kanji", { exact: true }).fill("見る");
   await authoring.getByLabel("Hiragana", { exact: true }).fill("みる");
