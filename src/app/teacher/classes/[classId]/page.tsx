@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight, EnvelopeSimple, Plus, X } from "@phosphor-icons/react/dist/ssr";
+import { ArrowLeft, ArrowRightIcon, EnvelopeSimple, Plus, X } from "@phosphor-icons/react/dist/ssr";
 import { createLesson, inviteStudent, revokeInvitation } from "@/app/actions";
 import { ActionForm } from "@/components/action-form";
 import { EmptyState } from "@/components/empty-state";
@@ -58,7 +58,7 @@ export default async function ClassPage({ params }: PageProps<"/teacher/classes/
                         </div>
                         <p className="mt-2 text-sm text-muted">{lesson.cards?.[0]?.count ?? 0} thẻ</p>
                       </div>
-                      <ArrowRight className="shrink-0" aria-hidden="true" />
+                      <ArrowRightIcon className="shrink-0" aria-hidden="true" />
                     </Link>
                   ))}
                 </div>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Plus } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRightIcon, Plus } from "@phosphor-icons/react/dist/ssr";
 import { createClass } from "@/app/actions";
 import { ActionForm } from "@/components/action-form";
 import { EmptyState } from "@/components/empty-state";
@@ -37,7 +37,7 @@ export default async function TeacherHome() {
                       <p className="mt-1 line-clamp-2 break-words text-sm text-muted">{klass.description || "Chưa có mô tả"}</p>
                       <p className="mt-2 text-xs font-semibold tabular-nums text-muted">{klass.lessons?.[0]?.count ?? 0} bài · {klass.class_memberships?.[0]?.count ?? 0} học viên</p>
                     </div>
-                    <ArrowRight size={22} className="shrink-0" aria-hidden="true" />
+                    <ArrowRightIcon size={22} className="shrink-0" aria-hidden="true" />
                   </Link>
                 ))}
               </div>
