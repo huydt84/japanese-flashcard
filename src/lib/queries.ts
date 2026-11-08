@@ -4,7 +4,7 @@ import { withActor } from "@/lib/db";
 import type { Profile, ReviewRating, StudyCard } from "@/lib/types";
 
 type TeacherClass = { id: string; name: string; description: string; created_at: Date; member_count: number; lesson_count: number };
-type TeacherLesson = { id: string; title: string; status: string; card_count: number };
+type TeacherLesson = { id: string; title: string; status: string; student_creator_id: string | null; creator_name: string | null; card_count: number };
 type PendingInvite = { id: string; email: string; status: string; created_at: Date };
 type ProgressRow = { student_id: string; studied: string; total: string; due: string; good_reviews: string; review_count: string; last_review: Date | null };
 type StudyProgress = { card_id: string; due_at: Date | null; last_rating: ReviewRating | null };
@@ -26,9 +26,10 @@ export async function getTeacherClass(actorId: string, classId: string) {
   return withActor(actorId, async (client) => {
     const klass = await client.query("SELECT id,name,description FROM public.classes WHERE id=$1", [classId]);
     const lessons = await client.query<TeacherLesson>(
-      `SELECT l.id,l.title,l.status,count(c.id)::int AS card_count
+      `SELECT l.id,l.title,l.status,l.student_creator_id,p.display_name AS creator_name,count(c.id)::int AS card_count
       FROM public.lessons l LEFT JOIN public.cards c ON c.lesson_id=l.id
-      WHERE l.class_id=$1 GROUP BY l.id ORDER BY l.position`, [classId]);
+      LEFT JOIN public.profiles p ON p.id=l.student_creator_id
+      WHERE l.class_id=$1 GROUP BY l.id,p.display_name ORDER BY l.position,l.created_at`, [classId]);
     const members = await client.query<{ student_id: string; display_name: string | null; email: string }>(
       `SELECT m.student_id,p.display_name,p.email
       FROM public.class_memberships m JOIN public.profiles p ON p.id=m.student_id
@@ -49,9 +50,9 @@ export async function getTeacherClass(actorId: string, classId: string) {
   });
 }
 
-export async function getTeacherLesson(actorId: string, lessonId: string, classId: string) {
+export async function getLessonEditor(actorId: string, lessonId: string, classId: string) {
   return withActor(actorId, async (client) => {
-    const lesson = await client.query<{ id: string; title: string; description: string; status: string }>("SELECT id,title,description,status FROM public.lessons WHERE id=$1 AND class_id=$2", [lessonId, classId]);
+    const lesson = await client.query<{ id: string; title: string; description: string; status: string; student_creator_id: string | null }>("SELECT id,title,description,status,student_creator_id FROM public.lessons WHERE id=$1 AND class_id=$2 AND public.kotoba_can_edit_lesson(id)", [lessonId, classId]);
     const cards = await client.query<StudyCardRow>("SELECT * FROM public.cards WHERE lesson_id=$1 ORDER BY position,created_at", [lessonId]);
     return { lesson: lesson.rows[0] ?? null, cards: cards.rows };
   });
@@ -61,22 +62,22 @@ export async function getStudentClasses(actorId: string) {
   return withActor(actorId, async (client) => {
     const result = await client.query<{
       class_id: string; class_name: string; class_description: string;
-      lesson_id: string | null; lesson_title: string | null; lesson_status: string | null;
+      lesson_id: string | null; lesson_title: string | null; lesson_status: string | null; student_creator_id: string | null;
       card_count: number; due_count: number;
     }>(
       `SELECT c.id AS class_id,c.name AS class_name,c.description AS class_description,
-        l.id AS lesson_id,l.title AS lesson_title,l.status AS lesson_status,
+        l.id AS lesson_id,l.title AS lesson_title,l.status AS lesson_status,l.student_creator_id,
         count(card.id)::int AS card_count,
         count(card.id) FILTER (WHERE progress.card_id IS NULL OR progress.due_at <= now())::int AS due_count
       FROM public.class_memberships membership
       JOIN public.classes c ON c.id=membership.class_id
-      LEFT JOIN public.lessons l ON l.class_id=c.id AND l.status='published'
+      LEFT JOIN public.lessons l ON l.class_id=c.id AND (l.status='published' OR l.student_creator_id=$1)
       LEFT JOIN public.cards card ON card.lesson_id=l.id
       LEFT JOIN public.card_progress progress ON progress.card_id=card.id AND progress.student_id=$1
       WHERE membership.student_id=$1
-      GROUP BY c.id,c.name,c.description,l.id,l.title,l.status
-      ORDER BY c.name,l.position`, [actorId]);
-    const classes = new Map<string, { id: string; name: string; description: string; lessons: { id: string; title: string; status: string; card_count: number; due_count: number }[] }>();
+      GROUP BY c.id,c.name,c.description,l.id,l.title,l.status,l.student_creator_id
+      ORDER BY c.name,l.position,l.created_at`, [actorId]);
+    const classes = new Map<string, { id: string; name: string; description: string; lessons: { id: string; title: string; status: string; student_creator_id: string | null; card_count: number; due_count: number }[] }>();
     for (const row of result.rows) {
       let klass = classes.get(row.class_id);
       if (!klass) {
@@ -84,7 +85,7 @@ export async function getStudentClasses(actorId: string) {
         classes.set(row.class_id, klass);
       }
       if (row.lesson_id && row.lesson_title && row.lesson_status) {
-        klass.lessons.push({ id: row.lesson_id, title: row.lesson_title, status: row.lesson_status, card_count: row.card_count, due_count: row.due_count });
+        klass.lessons.push({ id: row.lesson_id, title: row.lesson_title, status: row.lesson_status, student_creator_id: row.student_creator_id, card_count: row.card_count, due_count: row.due_count });
       }
     }
     return [...classes.values()];
@@ -144,3 +145,11 @@ export type MemberProgress = {
 };
 
 export type ProfileRow = Profile;
+
+export async function getStudentClass(actorId: string, classId: string) {
+  return withActor(actorId, async (client) => {
+    const result = await client.query<{ id: string; name: string }>(
+      "SELECT id,name FROM public.classes WHERE id=$1 AND public.kotoba_student_in_class(id)", [classId]);
+    return result.rows[0] ?? null;
+  });
+}

@@ -41,6 +41,7 @@ export default async function ClassPage({ params }: PageProps<"/teacher/classes/
                           <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${lesson.status === "published" ? "bg-correct/10 text-correct" : "bg-line/60 text-muted"}`}>{lesson.status === "published" ? "Đã xuất bản" : "Bản nháp"}</span>
                         </div>
                         <p className="mt-2 text-sm text-muted">{lesson.card_count} thẻ</p>
+                        {lesson.student_creator_id && <p className="mt-1 break-words text-sm text-muted">Bài học cá nhân của {lesson.creator_name || "học viên"} · Chỉ học viên tạo bài và giáo viên</p>}
                       </div>
                       <ArrowRightIcon className="shrink-0" aria-hidden="true" />
                     </Link>

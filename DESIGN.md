@@ -198,6 +198,8 @@ Spacing follows an `8px`-based rhythm, most often `12`, `16`, `20`, `24`, `32`, 
 
 Lesson overviews cap the vocabulary list at `1024px`. Repeated mode controls bracket the list, pairing horizontally from `640px` and stacking below it. Vocabulary rows use a `1:1.6` reading-to-meaning grid from the same breakpoint and a single column on mobile. A centered setup dialog temporarily takes focus; active flashcards and quiz questions then return to a single learning object.
 
+Personal-lesson creation uses one focused paper form capped at `42rem`. Student class headers and lesson rows retain the flat list structure; their creation, study, and edit actions stack below the text on phones and align beside it from `640px`. Personal lessons use the same editor layout as teacher-authored lessons.
+
 **The One Dominant Object Rule.** Each viewport has one clear working object—promise, list, form, or flashcard—and supporting regions must remain visually subordinate.
 
 ## Elevation & Depth
@@ -254,6 +256,10 @@ Components feel tactile but restrained: crisp labels, reachable targets, a soft 
 ### Navigation
 
 The desktop rail sits on Quiet Paper with a Desk Line boundary. Items are `44px` high, semibold, and become Bright Paper on hover. On mobile the rail becomes a horizontal band with scrollable items instead of a collapsed icon drawer.
+
+### Personal lesson authoring
+
+Personal lessons reuse the existing paper forms, fields, status chips, and flat vocabulary rows. A secondary creation action belongs to each joined class header. The creation form places the class name and privacy explanation above the fields, including that publication keeps the same audience. Dashboard rows place personal, publication, and privacy labels beneath the title, with a separate edit action. Teacher class rows add creator and privacy metadata in the same quiet text treatment. The shared editor keeps privacy copy near the title and status; its title, card, import, ordering, deletion, and publication controls retain the established teacher-editor language.
 
 ### Study Card and Review Controls
 

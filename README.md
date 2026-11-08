@@ -164,3 +164,9 @@ Sau deploy, đăng nhập thử bằng Google trên domain production và xác n
 - `src/app/actions.ts`: mutations đã xác thực
 - `database/migrations`: schema PostgreSQL, Auth.js profile sync, domain commands và RLS
 - `PRODUCT.md`: product truth đã xác nhận
+
+### Student personal lessons
+
+Students can use **Tạo bài học cá nhân** in a joined classroom to create a draft, add or import cards with the existing editor, and publish it for their own study. The creator and that classroom's teacher can view and edit the lesson. Publishing keeps it private to those two people. Other members cannot open its editor, study its cards, or submit reviews for them.
+
+The active Neon/PostgreSQL migrations are `database/migrations/004_student_personal_lessons.sql` and `database/migrations/005_student_lesson_insert_returning.sql`; the historical Supabase migrations are not the current migration runner. Apply with `rtk pnpm run db:migrate:local` locally. Production requires this migration and a code deployment together. No existing lessons change audience. Progress totals count personal cards only for their creator.

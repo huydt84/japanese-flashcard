@@ -34,6 +34,24 @@ async function actorForRole(requiredRole: WorkspaceRole) {
   return { actorId, profile };
 }
 
+async function actorForLesson(lessonId: string, classId: string) {
+  const { actorId } = await requireProfile();
+  const editable = await actorQuery(actorId,
+    "SELECT id FROM public.lessons WHERE id=$1 AND class_id=$2 AND public.kotoba_can_edit_lesson(id)",
+    [lessonId, classId]);
+  if (!editable.rowCount) throw new Error("Không tìm thấy bài học hoặc bạn không có quyền chỉnh sửa.");
+  return { actorId };
+}
+
+function refreshLesson(lessonId: string, classId: string) {
+  revalidatePath(`/teacher/classes/${classId}`);
+  revalidatePath(`/teacher/classes/${classId}/lessons/${lessonId}`);
+  revalidatePath(`/student/classes/${classId}/lessons/${lessonId}`);
+  revalidatePath("/student");
+  revalidatePath(`/study/${lessonId}`);
+  revalidatePath(`/preview/${lessonId}`);
+}
+
 export async function signOut() {
   await authSignOut({ redirectTo: "/" });
 }
@@ -69,30 +87,33 @@ export async function createClass(previous: ActionState, formData: FormData): Pr
 
 export async function createLesson(classId: string, previous: ActionState, formData: FormData): Promise<ActionState> {
   let lessonId = "";
+  let workspace: WorkspaceRole = "teacher";
   try {
     uuidSchema.parse(classId);
     const parsed = lessonSchema.parse({ title: formData.get("title"), description: formData.get("description") });
-    const { actorId } = await actorForRole("teacher");
+    const { actorId, workspaceRole } = await requireProfile();
+    workspace = workspaceRole;
     const created = await actorQuery<{ id: string }>(actorId,
-      "INSERT INTO public.lessons (title, description, class_id) VALUES ($1, $2, $3) RETURNING id",
-      [parsed.title, parsed.description, classId]);
+      "INSERT INTO public.lessons (title, description, class_id, student_creator_id) VALUES ($1, $2, $3, $4) RETURNING id",
+      [parsed.title, parsed.description, classId, workspaceRole === "student" ? actorId : null]);
     lessonId = created.rows[0].id;
+    refreshLesson(lessonId, classId);
   } catch (error) {
     return failure(previous, error, "Không thể tạo bài học. Hãy thử lại.");
   }
-  redirect(`/teacher/classes/${classId}/lessons/${lessonId}`);
+  redirect(`/${workspace}/classes/${classId}/lessons/${lessonId}`);
 }
 
 export async function updateLessonTitle(lessonId: string, classId: string, previous: ActionState, formData: FormData): Promise<ActionState> {
   try {
     uuidSchema.parse(lessonId); uuidSchema.parse(classId);
     const { title } = lessonSchema.pick({ title: true }).parse({ title: formData.get("title") });
-    const { actorId } = await actorForRole("teacher");
+    const { actorId } = await actorForLesson(lessonId, classId);
     const updated = await actorQuery(actorId,
       "UPDATE public.lessons SET title = $1, updated_at = now() WHERE id = $2 AND class_id = $3 RETURNING id",
       [title, lessonId, classId]);
     if (!updated.rowCount) throw new Error("Không thể đổi tên buổi học. Hãy thử lại.");
-    revalidatePath(`/teacher/classes/${classId}`); revalidatePath(`/teacher/classes/${classId}/lessons/${lessonId}`); revalidatePath("/student"); revalidatePath(`/study/${lessonId}`);
+    refreshLesson(lessonId, classId);
     return result(previous, "success", "Đã đổi tên buổi học.");
   } catch (error) { return failure(previous, error, "Không thể đổi tên buổi học. Hãy thử lại."); }
 }
@@ -116,9 +137,9 @@ export async function addCard(lessonId: string, classId: string, previous: Actio
   try {
     uuidSchema.parse(lessonId); uuidSchema.parse(classId);
     const parsed = cardSchema.parse(Object.fromEntries(["kanji", "hiragana", "meaning_vi", "example_ja", "example_vi"].map((key) => [key, formData.get(key)])));
-    const { actorId } = await actorForRole("teacher");
+    const { actorId } = await actorForLesson(lessonId, classId);
     await appendCards(actorId, lessonId, classId, [parsed]);
-    revalidatePath(`/teacher/classes/${classId}/lessons/${lessonId}`);
+    refreshLesson(lessonId, classId);
     return result(previous, "success", "Đã thêm thẻ.");
   } catch (error) { return failure(previous, error, "Không thể thêm thẻ. Hãy thử lại."); }
 }
@@ -127,12 +148,12 @@ export async function updateCard(cardId: string, lessonId: string, classId: stri
   try {
     uuidSchema.parse(cardId); uuidSchema.parse(lessonId); uuidSchema.parse(classId);
     const parsed = cardSchema.parse(Object.fromEntries(["kanji", "hiragana", "meaning_vi", "example_ja", "example_vi"].map((key) => [key, formData.get(key)])));
-    const { actorId } = await actorForRole("teacher");
+    const { actorId } = await actorForLesson(lessonId, classId);
     const updated = await actorQuery(actorId,
       "UPDATE public.cards SET kanji=$1, hiragana=$2, meaning_vi=$3, example_ja=$4, example_vi=$5, updated_at=now() WHERE id=$6 AND lesson_id=$7 RETURNING id",
       [parsed.kanji, parsed.hiragana, parsed.meaning_vi, parsed.example_ja, parsed.example_vi, cardId, lessonId]);
     if (!updated.rowCount) throw new Error("Không thể lưu thay đổi. Hãy thử lại.");
-    revalidatePath(`/teacher/classes/${classId}/lessons/${lessonId}`);
+    refreshLesson(lessonId, classId);
     return result(previous, "success", "Đã lưu thay đổi.");
   } catch (error) { return failure(previous, error, "Không thể lưu thay đổi. Hãy thử lại."); }
 }
@@ -140,10 +161,10 @@ export async function updateCard(cardId: string, lessonId: string, classId: stri
 export async function deleteCard(cardId: string, lessonId: string, classId: string, previous: ActionState): Promise<ActionState> {
   try {
     uuidSchema.parse(cardId); uuidSchema.parse(lessonId); uuidSchema.parse(classId);
-    const { actorId } = await actorForRole("teacher");
+    const { actorId } = await actorForLesson(lessonId, classId);
     const deleted = await actorQuery(actorId, "DELETE FROM public.cards WHERE id=$1 AND lesson_id=$2 RETURNING id", [cardId, lessonId]);
     if (!deleted.rowCount) throw new Error("Không thể xóa thẻ. Hãy thử lại.");
-    revalidatePath(`/teacher/classes/${classId}/lessons/${lessonId}`);
+    refreshLesson(lessonId, classId);
     return result(previous, "success", "Đã xóa thẻ.");
   } catch (error) { return failure(previous, error, "Không thể xóa thẻ. Hãy thử lại."); }
 }
@@ -152,9 +173,9 @@ export async function moveCard(cardId: string, direction: "up" | "down", lessonI
   try {
     uuidSchema.parse(cardId); uuidSchema.parse(lessonId); uuidSchema.parse(classId);
     const movement = z.enum(["up", "down"]).parse(direction);
-    const { actorId } = await actorForRole("teacher");
+    const { actorId } = await actorForLesson(lessonId, classId);
     await actorQuery(actorId, "SELECT public.kotoba_move_card($1, $2)", [cardId, movement]);
-    revalidatePath(`/teacher/classes/${classId}/lessons/${lessonId}`);
+    refreshLesson(lessonId, classId);
     return result(previous, "success", "Đã đổi vị trí thẻ.");
   } catch (error) { return failure(previous, error, "Không thể đổi vị trí thẻ. Hãy thử lại."); }
 }
@@ -162,7 +183,7 @@ export async function moveCard(cardId: string, direction: "up" | "down", lessonI
 export async function importCards(lessonId: string, classId: string, previous: ActionState, formData: FormData): Promise<ActionState> {
   try {
     uuidSchema.parse(lessonId); uuidSchema.parse(classId);
-    const { actorId } = await actorForRole("teacher");
+    const { actorId } = await actorForLesson(lessonId, classId);
     let parsed: CardImportResult;
     if (formData.get("import_format") === "csv") {
       const source = formData.get("csv_source");
@@ -182,7 +203,7 @@ export async function importCards(lessonId: string, classId: string, previous: A
     }
     if (parsed.errors.length) return result(previous, "error", parsed.errors.slice(0, 4).map((error) => `Hàng ${error.row}: ${error.message}`).join("; ") + (parsed.errors.length > 4 ? `; và ${parsed.errors.length - 4} lỗi khác` : ""));
     await appendCards(actorId, lessonId, classId, parsed.rows);
-    revalidatePath(`/teacher/classes/${classId}/lessons/${lessonId}`);
+    refreshLesson(lessonId, classId);
     return result(previous, "success", `Đã nhập ${parsed.rows.length} thẻ.`);
   } catch (error) { return failure(previous, error, "Không thể nhập danh sách. Hãy thử lại."); }
 }
@@ -190,7 +211,7 @@ export async function importCards(lessonId: string, classId: string, previous: A
 export async function publishLesson(lessonId: string, classId: string, previous: ActionState): Promise<ActionState> {
   try {
     uuidSchema.parse(lessonId); uuidSchema.parse(classId);
-    const { actorId } = await actorForRole("teacher");
+    const { actorId } = await actorForLesson(lessonId, classId);
     const published = await withActor(actorId, async (client) => {
       const lesson = await client.query("SELECT id FROM public.lessons WHERE id=$1 AND class_id=$2 FOR UPDATE", [lessonId, classId]);
       if (!lesson.rowCount) throw new Error("Không tìm thấy bài học hoặc bạn không có quyền xuất bản.");
@@ -199,7 +220,7 @@ export async function publishLesson(lessonId: string, classId: string, previous:
       return client.query("UPDATE public.lessons SET status='published', published_at=coalesce(published_at, now()), updated_at=now() WHERE id=$1", [lessonId]);
     });
     void published;
-    revalidatePath(`/teacher/classes/${classId}`); revalidatePath(`/teacher/classes/${classId}/lessons/${lessonId}`);
+    refreshLesson(lessonId, classId);
     return result(previous, "success", "Đã xuất bản bài học.");
   } catch (error) { return failure(previous, error, "Không thể xuất bản bài học. Hãy thử lại."); }
 }

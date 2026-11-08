@@ -1,7 +1,7 @@
 import { startFlashcards } from "./helpers/study";
 import { expect, test as base, type Page } from "@playwright/test";
 import ExcelJS from "exceljs";
-import { closeTestDatabase, createTestUser, deleteTestUsers, loginAsUser } from "./helpers/local-auth";
+import { closeTestDatabase, createTestUser, deleteTestUsers, loginAsUser, testQuery } from "./helpers/local-auth";
 
 type Actors = {
   teacher: Page;
@@ -379,4 +379,135 @@ test("reverse study saves ratings from either face and undo after shuffling upda
   await teacher.reload();
   await expect(progress.getByRole("cell").nth(1)).toHaveText("1/3");
   await expect(progress.getByRole("cell").nth(3)).toHaveText("100%");
+});
+
+test("student creates and studies a private classroom lesson visible only to its creator and teacher", async ({ actors, browser }, testInfo) => {
+  test.setTimeout(180_000);
+  const { teacher, student, studentEmail } = actors;
+  const { classPath } = await createClassAndLesson(teacher, "Lớp bài học cá nhân", "Bài chung của lớp");
+  await addCard(teacher, { kanji: "学ぶ", hiragana: "まなぶ", meaning: "học", exampleJa: "日本語を学びます。", exampleVi: "Tôi học tiếng Nhật." });
+  await teacher.getByRole("button", { name: "Xuất bản", exact: true }).click();
+  await expect(teacher.getByText("Đã xuất bản", { exact: true })).toBeVisible();
+  await sendInvitation(teacher, classPath, studentEmail);
+  await openInvitation(student, "Lớp bài học cá nhân");
+  await student.getByRole("button", { name: "Tham gia" }).click();
+  await expect(student.getByRole("heading", { name: "Không có thông báo mới" })).toBeVisible();
+  await student.goto("/student");
+  await student.getByRole("link", { name: "Tạo bài học cá nhân" }).click();
+  await expect(student).toHaveURL(/\/student\/classes\/[0-9a-f-]+\/lessons\/new$/);
+  const newPath = new URL(student.url()).pathname;
+  await expect(student.getByRole("heading", { name: "Tạo bài học cá nhân" })).toBeVisible();
+  await student.getByRole("textbox", { name: "Tên bài" }).fill("Từ vựng riêng của tôi");
+  await student.getByRole("button", { name: "Tạo bài", exact: true }).click();
+  await expect(student).toHaveURL(/\/student\/classes\/[0-9a-f-]+\/lessons\/[0-9a-f-]+$/);
+  const editorPath = new URL(student.url()).pathname;
+  const lessonId = editorPath.split("/").at(-1);
+  await expect(student.getByText("Bài học cá nhân. Chỉ học viên tạo bài và giáo viên của lớp có thể xem.")).toBeVisible();
+  await student.getByRole("button", { name: "Đổi tên buổi học: Từ vựng riêng của tôi" }).click();
+  await student.getByRole("textbox", { name: "Tên buổi học" }).fill("Từ vựng riêng đã đổi tên");
+  await student.getByRole("button", { name: "Lưu", exact: true }).click();
+  await expect(student.getByRole("button", { name: "Đổi tên buổi học: Từ vựng riêng đã đổi tên" })).toBeVisible();
+  await student.getByRole("button", { name: "Đổi tên buổi học: Từ vựng riêng đã đổi tên" }).click();
+  await student.getByRole("textbox", { name: "Tên buổi học" }).fill("Từ vựng riêng của tôi");
+  await student.getByRole("button", { name: "Lưu", exact: true }).click();
+  await expect(student.getByRole("button", { name: "Đổi tên buổi học: Từ vựng riêng của tôi" })).toBeVisible();
+  await student.getByRole("button", { name: "Xuất bản", exact: true }).click();
+  await expect(student.getByRole("alert").filter({ hasText: "Cần ít nhất một thẻ" })).toBeVisible();
+  await addCard(student, { kanji: "読む", hiragana: "よむ", meaning: "đọc", exampleJa: "本を読みます。", exampleVi: "Tôi đọc sách." });
+  await student.getByText("Nhập từ Excel", { exact: true }).click();
+  await uploadWorkbook(student, [headers, ...excelCards]);
+  await expect(student.getByRole("status").filter({ hasText: "Đã nhập 2 thẻ." })).toBeVisible();
+  await student.getByText("Nhập từ CSV", { exact: true }).click();
+  const csv = student.locator("details").filter({ has: student.getByText("Nhập từ CSV", { exact: true }) });
+  await csv.getByRole("radio", { name: "Dán nội dung CSV" }).check();
+  await csv.getByRole("textbox", { name: "Nội dung CSV" }).fill("kanji,hiragana,meaning_vi,example_ja,example_vi\n書く,かく,viết,手紙を書きます。,Tôi viết thư.");
+  await csv.getByRole("button", { name: "Kiểm tra và nhập CSV" }).click();
+  await expect(csv.getByRole("status")).toHaveText("Đã nhập 1 thẻ.");
+  await expect(student.locator("article")).toHaveCount(4);
+  const lastCard = student.locator("article").last();
+  await lastCard.getByRole("button", { name: "Lên", exact: true }).click();
+  await expect(student.locator("article").locator("p.font-jp.text-2xl")).toHaveText(["読む", "学ぶ", "書く", "食べる"]);
+  await student.locator("article").first().getByText("Sửa nội dung thẻ", { exact: true }).click();
+  await student.locator("article").first().getByRole("textbox", { name: "Nghĩa tiếng Việt" }).fill("đọc sách");
+  await student.locator("article").first().getByRole("button", { name: "Lưu thay đổi" }).click();
+  await expect(student.locator("article").first().getByText("đọc sách", { exact: true })).toBeVisible();
+  await student.goto("/student");
+  await expect(student.getByText("Từ vựng riêng của tôi", { exact: true })).toBeVisible();
+  await expect(student.getByText("Bài học cá nhân · Bản nháp · Chỉ bạn và giáo viên", { exact: true })).toBeVisible();
+  await teacher.goto(classPath);
+  await expect(teacher.getByRole("link", { name: /Từ vựng riêng của tôi/ })).toBeVisible();
+
+  const peerContext = await browser.newContext();
+  const peerId = await createTestUser(`private-peer-${crypto.randomUUID()}@example.test`, "student", "Peer Student");
+  try {
+    const peer = await peerContext.newPage();
+    await loginAsUser(peer, peerId);
+    // Enroll a second student in the same class, so rejection proves privacy rather than lack of membership.
+    await testQuery("INSERT INTO public.class_memberships(class_id,student_id) VALUES ($1,$2)", [classPath.split("/").at(-1), peerId]);
+    for (const published of [false, true]) {
+      if (published) {
+        await student.goto(editorPath);
+        await student.getByRole("button", { name: "Xuất bản", exact: true }).click();
+        await expect(student.getByText("Đã xuất bản", { exact: true })).toBeVisible();
+      }
+      await peer.goto("/student");
+      await expect(peer.getByText("Bài chung của lớp", { exact: true })).toBeVisible();
+      await expect(peer.getByText("Từ vựng riêng của tôi", { exact: true })).toHaveCount(0);
+      await peer.goto(editorPath);
+      await expect(peer.getByRole("heading", { name: "Không tìm thấy trang" })).toBeVisible();
+      await peer.goto(`/study/${lessonId}`);
+      await expect(peer.getByRole("heading", { name: "Không tìm thấy trang" })).toBeVisible();
+    }
+    await student.goto(`/study/${lessonId}`);
+    await expect(student.getByRole("heading", { name: "Từ vựng riêng của tôi", exact: true })).toBeVisible();
+    await student.getByRole("button", { name: "Thẻ ghi nhớ", exact: true }).first().click();
+    await student.getByRole("checkbox", { name: "Học tất cả" }).uncheck();
+    await student.getByRole("spinbutton", { name: "Số thẻ trong phiên" }).fill("1");
+    await student.getByRole("button", { name: "Bắt đầu", exact: true }).click();
+    await student.getByRole("button", { name: /Đúng, phím 3/ }).click();
+    await expect(student.getByRole("heading", { name: "Đã hoàn thành phiên học." })).toBeVisible();
+    await teacher.goto(classPath);
+    const creatorProgress = teacher.getByRole("row").filter({ hasText: "Huy Student" });
+    const peerProgress = teacher.getByRole("row").filter({ hasText: "Peer Student" });
+    await expect(creatorProgress).toContainText("1/5");
+    await expect(peerProgress).toContainText("0/1");
+    await teacher.getByRole("link", { name: /Từ vựng riêng của tôi/ }).click();
+    await expect(teacher.getByText("đọc sách", { exact: true })).toBeVisible();
+    await teacher.getByRole("link", { name: "Xem demo tiết học" }).click();
+    await expect(teacher.getByRole("heading", { name: "Từ vựng riêng của tôi", exact: true })).toBeVisible();
+
+    const viewports = testInfo.project.name === "desktop"
+      ? [{ width: 320, height: 760 }, { width: 1440, height: 900 }, { width: 1920, height: 1080 }, { width: 1440, height: 1000 }]
+      : [{ width: 390, height: 844 }];
+    for (const viewport of viewports) {
+      await student.setViewportSize(viewport);
+      await teacher.setViewportSize(viewport);
+      for (const colorScheme of ["light", "dark"] as const) {
+        await student.emulateMedia({ colorScheme });
+        await teacher.emulateMedia({ colorScheme });
+        const name = `${testInfo.project.name}-${viewport.width}x${viewport.height}-${colorScheme}`;
+        const capture = async (page: Page, label: string) => {
+          const headings: Record<string, string> = { create: "Tạo bài học cá nhân", dashboard: "Hôm nay học gì?", editor: "Từ vựng riêng của tôi", teacher: "Lớp bài học cá nhân" };
+          if (label === "editor") await expect(page.getByRole("button", { name: "Đổi tên buổi học: Từ vựng riêng của tôi" })).toBeVisible();
+          else await expect(page.getByRole("heading", { name: headings[label], exact: true })).toBeVisible();
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
+          await page.screenshot({ path: `.impeccable/review/personal-lessons/${name}-${label}.png`, fullPage: true, caret: "initial" });
+        };
+        await student.goto(newPath);
+        await capture(student, "create");
+        await student.goto("/student");
+        await expect(student.getByText("Bài học cá nhân · Đã xuất bản · Chỉ bạn và giáo viên")).toBeVisible();
+        await capture(student, "dashboard");
+        await student.goto(editorPath);
+        await student.locator("article").first().getByText("Sửa nội dung thẻ", { exact: true }).click();
+        await student.getByText("Nhập từ CSV", { exact: true }).click();
+        await capture(student, "editor");
+        await teacher.goto(classPath);
+        await capture(teacher, "teacher");
+      }
+    }
+  } finally {
+    await peerContext.close();
+    await deleteTestUsers([peerId]);
+  }
 });

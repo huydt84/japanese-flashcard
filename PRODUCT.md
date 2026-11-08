@@ -38,6 +38,8 @@ The teaching workflow and the learning loop live together: teacher-authored kanj
 - A privileged development admin can switch between the real teacher and student workspaces; admin is not offered during onboarding and has no separate product dashboard.
 - Teachers create classes, draft/publish lessons, manage cards and invite students by email.
 - Students accept or decline invitations, join classes and study published lessons.
+- Within a joined class, students can create personal lessons, edit their titles and cards, import Excel/CSV, and publish them for their own study. Only the student creator and the classroom teacher can see these lessons, including drafts and published lessons. Other students, unrelated teachers, and admins in unrelated workspaces have no access. The creator and classroom teacher can edit; publication never changes the audience.
+- Progress totals include published classroom lessons plus each student's own published personal lessons. Personal cards never increase another student's due or total counts.
 - Cards contain kanji, hiragana, Vietnamese meaning, a Japanese example and its Vietnamese translation.
 - Student lessons open with due and unseen vocabulary selected. Students can view and practice cards by the latest rating (Again, Hard, Good) or all vocabulary; both flashcards and multiple choice share the selected scope, direction, count, and shuffle controls. Teacher preview uses all vocabulary and saves no progress.
 - Multiple choice provides immediate feedback, vocabulary explanations, and a final score with answer review. It stores no quiz history and does not change review scheduling.
