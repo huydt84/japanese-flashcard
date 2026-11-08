@@ -17,10 +17,9 @@ export default async function Notifications() {
         ) : (
           <div className="divide-y divide-line border-y border-line">
             {invites.map((invite) => {
-              const klass = invite.classes as unknown as { name: string; description: string } | null;
               return (
                 <article key={invite.id} className="flex flex-col justify-between gap-5 py-6 sm:flex-row sm:items-center">
-                  <div className="min-w-0"><h2 className="break-words text-xl font-bold">{klass?.name ?? "Lời mời tham gia lớp học"}</h2><p className="mt-2 break-words text-muted">{klass?.description || "Bạn được mời tham gia lớp học này."}</p></div>
+                  <div className="min-w-0"><h2 className="break-words text-xl font-bold">{invite.name ?? "Lời mời tham gia lớp học"}</h2><p className="mt-2 break-words text-muted">{invite.description || "Bạn được mời tham gia lớp học này."}</p></div>
                   <div className="flex flex-wrap gap-2">
                     <ActionForm action={respondInvitation.bind(null, invite.id, false)} submitClassName="button-secondary" submitLabel="Từ chối" pendingLabel="Đang xử lý" icon={<X aria-hidden="true" />} />
                     <ActionForm action={respondInvitation.bind(null, invite.id, true)} submitClassName="button-primary" submitLabel="Tham gia" pendingLabel="Đang tham gia" icon={<Check aria-hidden="true" />} />

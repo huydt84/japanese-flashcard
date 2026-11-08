@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-Delegated and confirmed: Next.js App Router with TypeScript and Tailwind CSS, Supabase Auth/PostgreSQL/Realtime, deployed to Vercel.
+Delegated and confirmed: Next.js App Router with TypeScript and Tailwind CSS, Auth.js Google OAuth, Neon PostgreSQL with row-level security, deployed to Vercel.
 
 ## Users
 
@@ -27,7 +27,7 @@ The teaching workflow and the learning loop live together: teacher-authored kanj
 ## Operating Context
 
 - Vietnamese interface with Japanese learning content and Vietnamese meanings.
-- Teachers author cards individually or import a fixed Excel (.xlsx) template.
+- Teachers author cards individually, import fixed Excel (.xlsx) or UTF-8 CSV templates, or paste CSV text. Bulk imports require the same five fields, accept up to 500 cards and 750 KB, and reject the entire batch when any row is invalid.
 - Students study the published lessons of classes they have joined.
 - Invitations are delivered in-app and may wait for a matching Google account to register.
 

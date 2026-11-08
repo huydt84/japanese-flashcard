@@ -2,13 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { ZodError } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { ZodError, z } from "zod";
+import { signOut as authSignOut } from "@/auth";
+import { actorQuery, withActor } from "@/lib/db";
 import { cardSchema, classSchema, inviteSchema, lessonSchema, roleSchema, uuidSchema } from "@/lib/validation";
 import { parseCardXlsx } from "@/lib/xlsx";
-import { resolveWorkspaceRole } from "@/lib/roles";
+import { parseCardCsv, parseCardCsvFile } from "@/lib/csv";
+import type { CardImportResult } from "@/lib/card-import";
 import type { ActionState } from "@/lib/action-state";
-import type { Profile, ReviewRating, WorkspaceRole } from "@/lib/types";
+import type { ReviewRating, WorkspaceRole } from "@/lib/types";
+import { getViewer, requireProfile } from "@/lib/auth";
 
 function result(previous: ActionState, status: ActionState["status"], message: string): ActionState {
   return { status, message, revision: previous.revision + 1 };
@@ -20,41 +23,32 @@ function failure(previous: ActionState, error: unknown, fallback: string): Actio
   return result(previous, "error", fallback);
 }
 
-async function userOrThrow() {
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.getClaims();
-  if (error || !data?.claims.sub) throw new Error("Bạn cần đăng nhập");
-  return { supabase, user: { id: data.claims.sub } };
+async function actorOrThrow() {
+  const viewer = await getViewer();
+  if (!viewer?.profile) throw new Error("Bạn cần đăng nhập");
+  return viewer;
 }
 
-async function userForRole(requiredRole: WorkspaceRole) {
-  const { supabase, user } = await userOrThrow();
-  const { data: profile, error } = await supabase.from("profiles").select("id,email,display_name,avatar_url,role,active_mode").eq("id", user.id).single();
-  if (error || !profile) throw new Error("Không tìm thấy hồ sơ");
-  if (resolveWorkspaceRole(profile as Profile) !== requiredRole) throw new Error(`Hãy chuyển sang chế độ ${requiredRole === "teacher" ? "giáo viên" : "học sinh"}`);
-  return { supabase, user, profile: profile as Profile };
+async function actorForRole(requiredRole: WorkspaceRole) {
+  const { actorId, profile } = await requireProfile(requiredRole);
+  return { actorId, profile };
 }
 
 export async function signOut() {
-  const { supabase } = await userOrThrow();
-  await supabase.auth.signOut();
-  redirect("/");
+  await authSignOut({ redirectTo: "/" });
 }
 
 export async function chooseRole(formData: FormData) {
   const role = roleSchema.parse(formData.get("role"));
-  const { supabase } = await userOrThrow();
-  const { error } = await supabase.rpc("set_my_role", { chosen_role: role });
-  if (error) throw new Error("Vai trò đã được chọn hoặc không hợp lệ");
+  const { actorId } = await actorOrThrow();
+  await withActor(actorId, (client) => client.query("SELECT public.kotoba_choose_role($1::public.user_role)", [role]));
   redirect(role === "teacher" ? "/teacher" : "/student");
 }
 
 export async function switchAdminMode(mode: WorkspaceRole) {
   const selectedMode = roleSchema.parse(mode);
-  const supabase = await createClient();
-  // The RPC checks auth.uid() and the persisted admin role atomically with the update.
-  const { error } = await supabase.rpc("set_admin_mode", { selected_mode: selectedMode });
-  if (error) throw new Error("Không thể chuyển chế độ admin");
+  const { actorId } = await actorOrThrow();
+  await withActor(actorId, (client) => client.query("SELECT public.kotoba_switch_admin_mode($1)", [selectedMode]));
   redirect(selectedMode === "teacher" ? "/teacher" : "/student");
 }
 
@@ -62,10 +56,11 @@ export async function createClass(previous: ActionState, formData: FormData): Pr
   let classId = "";
   try {
     const parsed = classSchema.parse({ name: formData.get("name"), description: formData.get("description") });
-    const { supabase, user } = await userForRole("teacher");
-    const { data, error } = await supabase.from("classes").insert({ ...parsed, teacher_id: user.id }).select("id").single();
-    if (error || !data) throw new Error("Không thể tạo lớp. Hãy thử lại.");
-    classId = data.id;
+    const { actorId } = await actorForRole("teacher");
+    const created = await actorQuery<{ id: string }>(actorId,
+      "INSERT INTO public.classes (name, description, teacher_id) VALUES ($1, $2, $3) RETURNING id",
+      [parsed.name, parsed.description, actorId]);
+    classId = created.rows[0].id;
   } catch (error) {
     return failure(previous, error, "Không thể tạo lớp. Hãy thử lại.");
   }
@@ -77,10 +72,11 @@ export async function createLesson(classId: string, previous: ActionState, formD
   try {
     uuidSchema.parse(classId);
     const parsed = lessonSchema.parse({ title: formData.get("title"), description: formData.get("description") });
-    const { supabase } = await userForRole("teacher");
-    const { data, error } = await supabase.from("lessons").insert({ ...parsed, class_id: classId }).select("id").single();
-    if (error || !data) throw new Error("Không thể tạo bài học. Hãy thử lại.");
-    lessonId = data.id;
+    const { actorId } = await actorForRole("teacher");
+    const created = await actorQuery<{ id: string }>(actorId,
+      "INSERT INTO public.lessons (title, description, class_id) VALUES ($1, $2, $3) RETURNING id",
+      [parsed.title, parsed.description, classId]);
+    lessonId = created.rows[0].id;
   } catch (error) {
     return failure(previous, error, "Không thể tạo bài học. Hãy thử lại.");
   }
@@ -91,159 +87,172 @@ export async function updateLessonTitle(lessonId: string, classId: string, previ
   try {
     uuidSchema.parse(lessonId); uuidSchema.parse(classId);
     const { title } = lessonSchema.pick({ title: true }).parse({ title: formData.get("title") });
-    const { supabase } = await userForRole("teacher");
-    const { data, error } = await supabase.from("lessons").update({ title }).eq("id", lessonId).eq("class_id", classId).select("id").single();
-    if (error || !data) throw new Error("Không thể đổi tên buổi học. Hãy thử lại.");
-    revalidatePath(`/teacher/classes/${classId}`);
-    revalidatePath(`/teacher/classes/${classId}/lessons/${lessonId}`);
-    revalidatePath("/student");
-    revalidatePath(`/study/${lessonId}`);
+    const { actorId } = await actorForRole("teacher");
+    const updated = await actorQuery(actorId,
+      "UPDATE public.lessons SET title = $1, updated_at = now() WHERE id = $2 AND class_id = $3 RETURNING id",
+      [title, lessonId, classId]);
+    if (!updated.rowCount) throw new Error("Không thể đổi tên buổi học. Hãy thử lại.");
+    revalidatePath(`/teacher/classes/${classId}`); revalidatePath(`/teacher/classes/${classId}/lessons/${lessonId}`); revalidatePath("/student"); revalidatePath(`/study/${lessonId}`);
     return result(previous, "success", "Đã đổi tên buổi học.");
-  } catch (error) {
-    return failure(previous, error, "Không thể đổi tên buổi học. Hãy thử lại.");
-  }
+  } catch (error) { return failure(previous, error, "Không thể đổi tên buổi học. Hãy thử lại."); }
+}
+
+async function appendCards(actorId: string, lessonId: string, classId: string, cards: CardImportResult["rows"]) {
+  await withActor(actorId, async (client) => {
+    const lesson = await client.query("SELECT id FROM public.lessons WHERE id = $1 AND class_id = $2 FOR UPDATE", [lessonId, classId]);
+    if (!lesson.rowCount) throw new Error("Không tìm thấy bài học hoặc bạn không có quyền nhập thẻ.");
+    const position = await client.query<{ next_position: number }>("SELECT coalesce(max(position), -1) + 1 AS next_position FROM public.cards WHERE lesson_id = $1", [lessonId]);
+    const values: unknown[] = [];
+    const rows = cards.map((card, index) => {
+      const offset = values.length;
+      values.push(lessonId, card.kanji, card.hiragana, card.meaning_vi, card.example_ja, card.example_vi, position.rows[0].next_position + index);
+      return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7})`;
+    });
+    await client.query(`INSERT INTO public.cards (lesson_id, kanji, hiragana, meaning_vi, example_ja, example_vi, position) VALUES ${rows.join(",")}`, values);
+  });
 }
 
 export async function addCard(lessonId: string, classId: string, previous: ActionState, formData: FormData): Promise<ActionState> {
   try {
     uuidSchema.parse(lessonId); uuidSchema.parse(classId);
     const parsed = cardSchema.parse(Object.fromEntries(["kanji", "hiragana", "meaning_vi", "example_ja", "example_vi"].map((key) => [key, formData.get(key)])));
-    const { supabase } = await userForRole("teacher");
-    const { data: lastCard } = await supabase.from("cards").select("position").eq("lesson_id", lessonId).order("position", { ascending: false }).limit(1).maybeSingle();
-    const { error } = await supabase.from("cards").insert({ ...parsed, lesson_id: lessonId, position: (lastCard?.position ?? -1) + 1 });
-    if (error) throw new Error("Không thể thêm thẻ. Hãy thử lại.");
+    const { actorId } = await actorForRole("teacher");
+    await appendCards(actorId, lessonId, classId, [parsed]);
     revalidatePath(`/teacher/classes/${classId}/lessons/${lessonId}`);
     return result(previous, "success", "Đã thêm thẻ.");
-  } catch (error) {
-    return failure(previous, error, "Không thể thêm thẻ. Hãy thử lại.");
-  }
+  } catch (error) { return failure(previous, error, "Không thể thêm thẻ. Hãy thử lại."); }
 }
 
 export async function updateCard(cardId: string, lessonId: string, classId: string, previous: ActionState, formData: FormData): Promise<ActionState> {
   try {
     uuidSchema.parse(cardId); uuidSchema.parse(lessonId); uuidSchema.parse(classId);
     const parsed = cardSchema.parse(Object.fromEntries(["kanji", "hiragana", "meaning_vi", "example_ja", "example_vi"].map((key) => [key, formData.get(key)])));
-    const { supabase } = await userForRole("teacher");
-    const { error } = await supabase.from("cards").update(parsed).eq("id", cardId).eq("lesson_id", lessonId);
-    if (error) throw new Error("Không thể lưu thay đổi. Hãy thử lại.");
+    const { actorId } = await actorForRole("teacher");
+    const updated = await actorQuery(actorId,
+      "UPDATE public.cards SET kanji=$1, hiragana=$2, meaning_vi=$3, example_ja=$4, example_vi=$5, updated_at=now() WHERE id=$6 AND lesson_id=$7 RETURNING id",
+      [parsed.kanji, parsed.hiragana, parsed.meaning_vi, parsed.example_ja, parsed.example_vi, cardId, lessonId]);
+    if (!updated.rowCount) throw new Error("Không thể lưu thay đổi. Hãy thử lại.");
     revalidatePath(`/teacher/classes/${classId}/lessons/${lessonId}`);
     return result(previous, "success", "Đã lưu thay đổi.");
-  } catch (error) {
-    return failure(previous, error, "Không thể lưu thay đổi. Hãy thử lại.");
-  }
+  } catch (error) { return failure(previous, error, "Không thể lưu thay đổi. Hãy thử lại."); }
 }
 
 export async function deleteCard(cardId: string, lessonId: string, classId: string, previous: ActionState): Promise<ActionState> {
   try {
-    uuidSchema.parse(cardId);
-    const { supabase } = await userForRole("teacher");
-    const { error } = await supabase.from("cards").delete().eq("id", cardId).eq("lesson_id", lessonId);
-    if (error) throw new Error("Không thể xóa thẻ. Hãy thử lại.");
+    uuidSchema.parse(cardId); uuidSchema.parse(lessonId); uuidSchema.parse(classId);
+    const { actorId } = await actorForRole("teacher");
+    const deleted = await actorQuery(actorId, "DELETE FROM public.cards WHERE id=$1 AND lesson_id=$2 RETURNING id", [cardId, lessonId]);
+    if (!deleted.rowCount) throw new Error("Không thể xóa thẻ. Hãy thử lại.");
     revalidatePath(`/teacher/classes/${classId}/lessons/${lessonId}`);
     return result(previous, "success", "Đã xóa thẻ.");
-  } catch (error) {
-    return failure(previous, error, "Không thể xóa thẻ. Hãy thử lại.");
-  }
+  } catch (error) { return failure(previous, error, "Không thể xóa thẻ. Hãy thử lại."); }
 }
 
 export async function moveCard(cardId: string, direction: "up" | "down", lessonId: string, classId: string, previous: ActionState): Promise<ActionState> {
   try {
-    uuidSchema.parse(cardId);
-    const { supabase } = await userForRole("teacher");
-    const { error } = await supabase.rpc("move_card", { target_card: cardId, movement: direction });
-    if (error) throw new Error("Không thể đổi vị trí thẻ. Hãy thử lại.");
+    uuidSchema.parse(cardId); uuidSchema.parse(lessonId); uuidSchema.parse(classId);
+    const movement = z.enum(["up", "down"]).parse(direction);
+    const { actorId } = await actorForRole("teacher");
+    await actorQuery(actorId, "SELECT public.kotoba_move_card($1, $2)", [cardId, movement]);
     revalidatePath(`/teacher/classes/${classId}/lessons/${lessonId}`);
     return result(previous, "success", "Đã đổi vị trí thẻ.");
-  } catch (error) {
-    return failure(previous, error, "Không thể đổi vị trí thẻ. Hãy thử lại.");
-  }
+  } catch (error) { return failure(previous, error, "Không thể đổi vị trí thẻ. Hãy thử lại."); }
 }
 
 export async function importCards(lessonId: string, classId: string, previous: ActionState, formData: FormData): Promise<ActionState> {
   try {
     uuidSchema.parse(lessonId); uuidSchema.parse(classId);
-    const { supabase } = await userForRole("teacher");
-    const file = formData.get("xlsx");
-    if (!(file instanceof File)) return result(previous, "error", "Hãy chọn tệp Excel .xlsx");
-    const parsed = await parseCardXlsx(file);
+    const { actorId } = await actorForRole("teacher");
+    let parsed: CardImportResult;
+    if (formData.get("import_format") === "csv") {
+      const source = formData.get("csv_source");
+      if (source === "text") {
+        const text = formData.get("csv_text");
+        if (typeof text !== "string") return result(previous, "error", "Hãy dán nội dung CSV");
+        parsed = parseCardCsv(text);
+      } else if (source === "file") {
+        const file = formData.get("csv_file");
+        if (!(file instanceof File)) return result(previous, "error", "Hãy chọn tệp CSV .csv");
+        parsed = await parseCardCsvFile(file);
+      } else return result(previous, "error", "Hãy chọn tải tệp hoặc dán nội dung CSV");
+    } else {
+      const file = formData.get("xlsx");
+      if (!(file instanceof File)) return result(previous, "error", "Hãy chọn tệp Excel .xlsx");
+      parsed = await parseCardXlsx(file);
+    }
     if (parsed.errors.length) return result(previous, "error", parsed.errors.slice(0, 4).map((error) => `Hàng ${error.row}: ${error.message}`).join("; ") + (parsed.errors.length > 4 ? `; và ${parsed.errors.length - 4} lỗi khác` : ""));
-    const { data: lastCard } = await supabase.from("cards").select("position").eq("lesson_id", lessonId).order("position", { ascending: false }).limit(1).maybeSingle();
-    const firstPosition = (lastCard?.position ?? -1) + 1;
-    const { error } = await supabase.from("cards").insert(parsed.rows.map((row, index) => ({ ...row, lesson_id: lessonId, position: firstPosition + index })));
-    if (error) throw new Error("Không thể nhập danh sách. Hãy thử lại.");
+    await appendCards(actorId, lessonId, classId, parsed.rows);
     revalidatePath(`/teacher/classes/${classId}/lessons/${lessonId}`);
     return result(previous, "success", `Đã nhập ${parsed.rows.length} thẻ.`);
-  } catch (error) {
-    return failure(previous, error, "Không thể nhập danh sách. Hãy thử lại.");
-  }
+  } catch (error) { return failure(previous, error, "Không thể nhập danh sách. Hãy thử lại."); }
 }
 
 export async function publishLesson(lessonId: string, classId: string, previous: ActionState): Promise<ActionState> {
   try {
-    const { supabase } = await userForRole("teacher");
-    const { count } = await supabase.from("cards").select("id", { count: "exact", head: true }).eq("lesson_id", lessonId);
-    if (!count) throw new Error("Cần ít nhất một thẻ trước khi xuất bản.");
-    const { error } = await supabase.from("lessons").update({ status: "published", published_at: new Date().toISOString() }).eq("id", lessonId);
-    if (error) throw new Error("Không thể xuất bản bài học. Hãy thử lại.");
-    revalidatePath(`/teacher/classes/${classId}`);
-    revalidatePath(`/teacher/classes/${classId}/lessons/${lessonId}`);
+    uuidSchema.parse(lessonId); uuidSchema.parse(classId);
+    const { actorId } = await actorForRole("teacher");
+    const published = await withActor(actorId, async (client) => {
+      const lesson = await client.query("SELECT id FROM public.lessons WHERE id=$1 AND class_id=$2 FOR UPDATE", [lessonId, classId]);
+      if (!lesson.rowCount) throw new Error("Không tìm thấy bài học hoặc bạn không có quyền xuất bản.");
+      const cards = await client.query<{ count: string }>("SELECT count(*)::text AS count FROM public.cards WHERE lesson_id=$1", [lessonId]);
+      if (Number(cards.rows[0].count) === 0) throw new Error("Cần ít nhất một thẻ trước khi xuất bản.");
+      return client.query("UPDATE public.lessons SET status='published', published_at=coalesce(published_at, now()), updated_at=now() WHERE id=$1", [lessonId]);
+    });
+    void published;
+    revalidatePath(`/teacher/classes/${classId}`); revalidatePath(`/teacher/classes/${classId}/lessons/${lessonId}`);
     return result(previous, "success", "Đã xuất bản bài học.");
-  } catch (error) {
-    return failure(previous, error, "Không thể xuất bản bài học. Hãy thử lại.");
-  }
+  } catch (error) { return failure(previous, error, "Không thể xuất bản bài học. Hãy thử lại."); }
 }
 
 export async function inviteStudent(classId: string, previous: ActionState, formData: FormData): Promise<ActionState> {
   try {
     const { email } = inviteSchema.parse({ email: formData.get("email") });
     uuidSchema.parse(classId);
-    const supabase = await createClient();
-    // Ownership, recipient lookup and notification delivery are one authorized transaction.
-    const { error } = await supabase.rpc("send_class_invitation", { target_class: classId, recipient_email: email });
-    if (error) throw new Error(error.code === "23505" ? "Email này đã có lời mời đang chờ." : error.message === "teacher_recipient" ? "Email này thuộc tài khoản giáo viên." : "Không thể gửi lời mời. Hãy thử lại.");
+    const { actorId } = await actorForRole("teacher");
+    await actorQuery(actorId, "SELECT public.kotoba_send_class_invitation($1, $2)", [classId, email]);
     revalidatePath(`/teacher/classes/${classId}`);
     return result(previous, "success", `Đã mời ${email}.`);
   } catch (error) {
-    return failure(previous, error, "Không thể gửi lời mời. Hãy thử lại.");
+    const message = error instanceof Error ? error.message : "";
+    return failure(previous, message.includes("duplicate key") ? new Error("Email này đã có lời mời đang chờ.") : message.includes("teacher_recipient") ? new Error("Email này thuộc tài khoản giáo viên.") : error, "Không thể gửi lời mời. Hãy thử lại.");
   }
 }
 
 export async function revokeInvitation(invitationId: string, classId: string, previous: ActionState): Promise<ActionState> {
   try {
-    const { supabase } = await userForRole("teacher");
-    const { error } = await supabase.from("class_invitations").update({ status: "revoked", responded_at: new Date().toISOString() }).eq("id", invitationId);
-    if (error) throw new Error("Không thể thu hồi lời mời. Hãy thử lại.");
+    uuidSchema.parse(invitationId); uuidSchema.parse(classId);
+    const { actorId } = await actorForRole("teacher");
+    await actorQuery(actorId, "SELECT public.kotoba_revoke_class_invitation($1, $2)", [invitationId, classId]);
     revalidatePath(`/teacher/classes/${classId}`);
     return result(previous, "success", "Đã thu hồi lời mời.");
-  } catch (error) {
-    return failure(previous, error, "Không thể thu hồi lời mời. Hãy thử lại.");
-  }
+  } catch (error) { return failure(previous, error, "Không thể thu hồi lời mời. Hãy thử lại."); }
 }
 
 export async function respondInvitation(invitationId: string, accept: boolean, previous: ActionState): Promise<ActionState> {
   try {
-    const { supabase } = await userForRole("student");
-    const { error } = await supabase.rpc("accept_class_invitation", { target_invitation: invitationId, accept_invitation: accept });
-    if (error) throw new Error("Không thể cập nhật lời mời. Hãy thử lại.");
+    uuidSchema.parse(invitationId);
+    const accepted = z.boolean().parse(accept);
+    const { actorId } = await actorForRole("student");
+    await actorQuery(actorId, "SELECT public.kotoba_respond_to_invitation($1, $2)", [invitationId, accepted]);
     revalidatePath("/student"); revalidatePath("/student/notifications");
-    return result(previous, "success", accept ? "Đã tham gia lớp." : "Đã từ chối lời mời.");
-  } catch (error) {
-    return failure(previous, error, "Không thể cập nhật lời mời. Hãy thử lại.");
-  }
+    return result(previous, "success", accepted ? "Đã tham gia lớp." : "Đã từ chối lời mời.");
+  } catch (error) { return failure(previous, error, "Không thể cập nhật lời mời. Hãy thử lại."); }
 }
 
 export async function submitReview(cardId: string, sessionId: string, rating: ReviewRating) {
-  const { supabase } = await userOrThrow();
-  const { error } = await supabase.rpc("record_review_v2", { target_card: cardId, target_session: sessionId, selected_rating: rating });
-  if (error) throw new Error(error.message);
+  uuidSchema.parse(cardId); uuidSchema.parse(sessionId);
+  const selectedRating = z.enum(["again", "hard", "good"]).parse(rating);
+  const { actorId } = await actorForRole("student");
+  await actorQuery(actorId, "SELECT public.kotoba_record_review($1, $2, $3::public.review_rating)", [cardId, sessionId, selectedRating]);
   revalidatePath("/student");
   return { saved: true };
 }
 
 export async function undoReview(sessionId: string) {
-  const { supabase } = await userOrThrow();
-  const { data, error } = await supabase.rpc("undo_latest_review", { target_session: sessionId });
-  if (error) throw new Error(error.message);
+  uuidSchema.parse(sessionId);
+  const { actorId } = await actorForRole("student");
+  const result = await actorQuery<{ card_id: string }>(actorId,
+    "SELECT public.kotoba_undo_latest_review($1) AS card_id", [sessionId]);
   revalidatePath("/student");
-  return { cardId: data as string };
+  return { cardId: result.rows[0].card_id };
 }

@@ -1,6 +1,7 @@
-import { namesMarked, requireEnvironment, validateProductionEnvironment } from "./env-contract.mjs";
+import { loadDeploymentEnvironment, namesMarked, requireEnvironment, validateProductionEnvironment } from "./env-contract.mjs";
 
-const required = [...await namesMarked("vercel"), ...await namesMarked("supabase-cli")];
+await loadDeploymentEnvironment();
+const required = [...await namesMarked("vercel"), ...await namesMarked("neon-cli")];
 requireEnvironment(required);
 validateProductionEnvironment();
 

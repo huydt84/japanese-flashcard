@@ -29,13 +29,13 @@ const sections = [
   {
     title: "Lưu trữ và bảo vệ",
     paragraphs: [
-      "Dữ liệu được lưu trên hạ tầng Supabase. Quyền truy cập được giới hạn theo tài khoản và lớp học: giáo viên chỉ quản lý lớp của mình; học sinh chỉ truy cập lớp đã tham gia và tiến độ của chính mình. Phiên đăng nhập được bảo vệ bằng cookie an toàn phía máy chủ.",
+      "Dữ liệu được lưu trong PostgreSQL trên Neon. Quyền truy cập được giới hạn theo tài khoản và lớp học: giáo viên chỉ quản lý lớp của mình; học sinh chỉ truy cập lớp đã tham gia và tiến độ của chính mình. Phiên đăng nhập được bảo vệ bằng cookie an toàn phía máy chủ.",
     ],
   },
   {
     title: "Chia sẻ dữ liệu",
     paragraphs: [
-      "Kotoba chỉ chuyển dữ liệu cần thiết cho Google để đăng nhập, Supabase để xác thực và lưu trữ, và Vercel để phân phối ứng dụng. Dữ liệu cũng được hiển thị cho giáo viên hoặc học sinh trong cùng lớp đúng với chức năng của sản phẩm.",
+      "Kotoba chỉ chuyển dữ liệu cần thiết cho Google để đăng nhập, Neon để lưu trữ, và Vercel để phân phối ứng dụng. Dữ liệu cũng được hiển thị cho giáo viên hoặc học sinh trong cùng lớp đúng với chức năng của sản phẩm.",
     ],
   },
   {

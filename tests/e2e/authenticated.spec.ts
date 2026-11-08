@@ -1,19 +1,17 @@
 import { expect, test } from "@playwright/test";
-import { createClient } from "@supabase/supabase-js";
 import { startFlashcards } from "./helpers/study";
+import { closeTestDatabase, createTestUser, deleteTestUsers, loginAsUser, testQuery } from "./helpers/local-auth";
 
 const enabled = process.env.RUN_AUTH_E2E === "1";
-test.skip(!enabled, "Requires the isolated local Supabase stack");
+test.skip(!enabled, "Requires the isolated local PostgreSQL stack");
 
-const apiUrl = process.env.TEST_SUPABASE_URL ?? "";
-const secretKey = process.env.TEST_SUPABASE_SECRET_KEY ?? "";
-const password = "Local-test-only-123!";
 const stamp = crypto.randomUUID();
 const teacherEmail = `ui-teacher-${stamp}@example.test`;
 const studentEmail = `ui-student-${stamp}@example.test`;
 const developerEmail = `ui-admin-${stamp}@example.test`;
 const otherTeacherEmail = `ui-other-teacher-${stamp}@example.test`;
 const createdUsers: string[] = [];
+const userIdsByEmail = new Map<string, string>();
 let classId = "";
 let lessonId = "";
 let draftLessonId = "";
@@ -23,49 +21,33 @@ let draftCardIds: string[] = [];
 const longExample = "Tôi viết một lá thư rất dài. ".repeat(15).trim();
 
 test.beforeAll(async () => {
-  const admin = createClient(apiUrl, secretKey, { auth: { persistSession: false } });
   for (const [email, role] of [[teacherEmail, "teacher"], [studentEmail, "student"], [developerEmail, "admin"], [otherTeacherEmail, "teacher"]] as const) {
-    const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: role === "teacher" ? "Mai Sensei" : "Huy" } });
-    if (error) throw error;
-    createdUsers.push(data.user.id);
-    await admin.from("profiles").update({ role, active_mode: role === "admin" ? "student" : null, onboarding_completed_at: new Date().toISOString() }).eq("id", data.user.id);
+    const id = await createTestUser(email, role, role === "teacher" ? "Mai Sensei" : "Huy", role === "admin" ? "student" : null);
+    createdUsers.push(id);
+    userIdsByEmail.set(email, id);
   }
-  const { data: klass, error: classError } = await admin.from("classes").insert({ teacher_id: createdUsers[0], name: "Tên lớp học", description: "Từ vựng N5 dùng mỗi ngày" }).select("id").single();
-  if (classError || !klass) throw classError ?? new Error("Không tạo được lớp kiểm thử");
-  classId = klass.id;
-  await admin.from("class_memberships").insert({ class_id: klass.id, student_id: createdUsers[1] });
-  const { data: lesson, error: lessonError } = await admin.from("lessons").insert({ class_id: klass.id, title: "Động từ mỗi ngày", description: "18 từ cơ bản", status: "published", published_at: new Date().toISOString() }).select("id").single();
-  if (lessonError || !lesson) throw lessonError ?? new Error("Không tạo được bài học kiểm thử");
-  lessonId = lesson.id;
-  const { data: cards, error: cardsError } = await admin.from("cards").insert([
-    { lesson_id: lessonId, kanji: "学ぶ", hiragana: "まなぶ", meaning_vi: "học, học hỏi", example_ja: "毎日、日本語を学びます。", example_vi: "Tôi học tiếng Nhật mỗi ngày.", position: 0 },
-    { lesson_id: lessonId, kanji: "食べる", hiragana: "たべる", meaning_vi: "ăn", example_ja: "朝ご飯を食べます。", example_vi: "Tôi ăn sáng.", position: 1 },
-  ]).select("id");
-  if (cardsError || !cards) throw cardsError ?? new Error("Không tạo được thẻ kiểm thử");
-  cardIds = cards.map((card) => card.id);
-  const { data: draft, error: draftError } = await admin.from("lessons").insert({ class_id: classId, title: "Bản nháp để xem thử", status: "draft" }).select("id").single();
-  if (draftError || !draft) throw draftError ?? new Error("Không tạo được bài nháp kiểm thử");
-  draftLessonId = draft.id;
-  const { data: draftCards, error: draftCardsError } = await admin.from("cards").insert([
-    { lesson_id: draftLessonId, kanji: "読む", hiragana: "よむ", meaning_vi: "đọc", example_ja: "本を読みます。", example_vi: "Tôi đọc sách.", position: 0 },
-    { lesson_id: draftLessonId, kanji: "書く", hiragana: "かく", meaning_vi: "viết", example_ja: "手紙を書きます。", example_vi: longExample, position: 1 },
-  ]).select("id");
-  if (draftCardsError || !draftCards) throw draftCardsError ?? new Error("Không tạo được thẻ bản nháp kiểm thử");
-  draftCardIds = draftCards.map((card) => card.id);
-  const { data: emptyLesson, error: emptyError } = await admin.from("lessons").insert({ class_id: classId, title: "Bài học trống", status: "draft" }).select("id").single();
-  if (emptyError || !emptyLesson) throw emptyError ?? new Error("Không tạo được bài học trống kiểm thử");
-  emptyLessonId = emptyLesson.id;
+  classId = (await testQuery<{ id: string }>("INSERT INTO public.classes (teacher_id,name,description) VALUES ($1,$2,$3) RETURNING id", [createdUsers[0], "Tên lớp học", "Từ vựng N5 dùng mỗi ngày"])).rows[0].id;
+  await testQuery("INSERT INTO public.class_memberships (class_id,student_id) VALUES ($1,$2)", [classId, createdUsers[1]]);
+  lessonId = (await testQuery<{ id: string }>("INSERT INTO public.lessons (class_id,title,description,status,published_at) VALUES ($1,$2,$3,'published',now()) RETURNING id", [classId, "Động từ mỗi ngày", "18 từ cơ bản"])).rows[0].id;
+  cardIds = (await testQuery<{ id: string }>(`INSERT INTO public.cards (lesson_id,kanji,hiragana,meaning_vi,example_ja,example_vi,position) VALUES
+    ($1,'学ぶ','まなぶ','học, học hỏi','毎日、日本語を学びます。','Tôi học tiếng Nhật mỗi ngày.',0),
+    ($1,'食べる','たべる','ăn','朝ご飯を食べます。','Tôi ăn sáng.',1) RETURNING id`, [lessonId])).rows.map((card) => card.id);
+  draftLessonId = (await testQuery<{ id: string }>("INSERT INTO public.lessons (class_id,title,status) VALUES ($1,'Bản nháp để xem thử','draft') RETURNING id", [classId])).rows[0].id;
+  draftCardIds = (await testQuery<{ id: string }>(`INSERT INTO public.cards (lesson_id,kanji,hiragana,meaning_vi,example_ja,example_vi,position) VALUES
+    ($1,'読む','よむ','đọc','本を読みます。','Tôi đọc sách.',0),
+    ($1,'書く','かく','viết','手紙を書きます。',$2,1) RETURNING id`, [draftLessonId, longExample])).rows.map((card) => card.id);
+  emptyLessonId = (await testQuery<{ id: string }>("INSERT INTO public.lessons (class_id,title,status) VALUES ($1,'Bài học trống','draft') RETURNING id", [classId])).rows[0].id;
 });
 
 test.afterAll(async () => {
-  const admin = createClient(apiUrl, secretKey, { auth: { persistSession: false } });
-  await Promise.all(createdUsers.map((id) => admin.auth.admin.deleteUser(id)));
+  await deleteTestUsers(createdUsers);
+  await closeTestDatabase();
 });
 
 async function login(page: import("@playwright/test").Page, email: string) {
-  await page.goto("/");
-  const status = await page.evaluate(async ({ email, password }) => (await fetch("/api/test-login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, password }) })).status, { email, password });
-  expect(status).toBe(200);
+  const userId = userIdsByEmail.get(email);
+  if (!userId) throw new Error("The test user was not prepared.");
+  await loginAsUser(page, userId);
 }
 
 test("teacher, student and study surfaces render from authenticated data", async ({ page }, testInfo) => {
@@ -120,13 +102,9 @@ test("teacher, student and study surfaces render from authenticated data", async
   await expect(page.getByText("2 thẻ đến hạn", { exact: false })).toBeVisible();
   await page.screenshot({ path: `.impeccable/review/student${suffix}.png`, fullPage: true });
 
-  const admin = createClient(apiUrl, secretKey, { auth: { persistSession: false } });
-  const { error: progressError } = await admin.from("card_progress").insert([
-    { student_id: createdUsers[1], card_id: cardIds[0], due_at: "2000-01-01T00:00:00Z" },
-    { student_id: createdUsers[1], card_id: cardIds[1], due_at: "2100-01-01T00:00:00Z" },
-    { student_id: createdUsers[2], card_id: cardIds[0], due_at: "2100-01-01T00:00:00Z" },
-  ]);
-  if (progressError) throw progressError;
+  await testQuery(`INSERT INTO public.card_progress (student_id,card_id,due_at) VALUES
+    ($1,$3,'2000-01-01T00:00:00Z'),($1,$4,'2100-01-01T00:00:00Z'),($2,$3,'2100-01-01T00:00:00Z')`,
+  [createdUsers[1], createdUsers[2], cardIds[0], cardIds[1]]);
   await page.reload();
   await expect(page.getByRole("link", { name: /1 thẻ đến hạn.*2 thẻ tất cả/ })).toBeVisible();
 
@@ -301,14 +279,12 @@ test("teacher previews draft and published lessons without writing student progr
   expect(leftExit.right).toBeLessThan(0);
   await expect(page.getByRole("heading", { name: "Đã xem hết thẻ." })).toBeVisible();
 
-  const admin = createClient(apiUrl, secretKey, { auth: { persistSession: false } });
-  const [{ count: progressCount, error: progressError }, { count: reviewCount, error: reviewError }] = await Promise.all([
-    admin.from("card_progress").select("card_id", { count: "exact", head: true }).in("card_id", draftCardIds),
-    admin.from("review_logs").select("id", { count: "exact", head: true }).in("card_id", draftCardIds),
+  const [{ rows: progressCount }, { rows: reviewCount }] = await Promise.all([
+    testQuery<{ count: string }>("SELECT count(*)::text AS count FROM public.card_progress WHERE card_id=ANY($1::uuid[])", [draftCardIds]),
+    testQuery<{ count: string }>("SELECT count(*)::text AS count FROM public.review_logs WHERE card_id=ANY($1::uuid[])", [draftCardIds]),
   ]);
-  if (progressError || reviewError) throw progressError ?? reviewError;
-  expect(progressCount).toBe(0);
-  expect(reviewCount).toBe(0);
+  expect(Number(progressCount[0].count)).toBe(0);
+  expect(Number(reviewCount[0].count)).toBe(0);
 
   await page.goto(`/teacher/classes/${classId}/lessons/${lessonId}`);
   await page.getByRole("link", { name: "Xem demo tiết học" }).click();
@@ -331,14 +307,12 @@ test("teacher previews draft and published lessons without writing student progr
 });
 
 test("vocabulary, centered setup and scored practice work in both themes without changing review history", async ({ page }, testInfo) => {
-  const admin = createClient(apiUrl, secretKey, { auth: { persistSession: false } });
   async function savedProgress() {
     const [progress, logs] = await Promise.all([
-      admin.from("card_progress").select("*").eq("student_id", createdUsers[1]).in("card_id", cardIds).order("card_id"),
-      admin.from("review_logs").select("*").eq("student_id", createdUsers[1]).in("card_id", cardIds).order("id"),
+      testQuery("SELECT * FROM public.card_progress WHERE student_id=$1 AND card_id=ANY($2::uuid[]) ORDER BY card_id", [createdUsers[1], cardIds]),
+      testQuery("SELECT * FROM public.review_logs WHERE student_id=$1 AND card_id=ANY($2::uuid[]) ORDER BY id", [createdUsers[1], cardIds]),
     ]);
-    if (progress.error || logs.error) throw progress.error ?? logs.error;
-    return { progress: progress.data, logs: logs.data };
+    return { progress: progress.rows, logs: logs.rows };
   }
   await login(page, studentEmail);
   const before = await savedProgress();
@@ -437,13 +411,11 @@ test("vocabulary, centered setup and scored practice work in both themes without
 });
 
 test("an open lesson updates its due list when a scheduled card becomes due", async ({ page }) => {
-  const admin = createClient(apiUrl, secretKey, { auth: { persistSession: false } });
   const dueAt = new Date(Date.now() + 10_000).toISOString();
-  const { error } = await admin.from("card_progress").upsert([
-    { student_id: createdUsers[1], card_id: cardIds[0], due_at: "2000-01-01T00:00:00Z", last_rating: "again" },
-    { student_id: createdUsers[1], card_id: cardIds[1], due_at: dueAt, last_rating: "hard" },
-  ], { onConflict: "student_id,card_id" });
-  if (error) throw error;
+  await testQuery(`INSERT INTO public.card_progress (student_id,card_id,due_at,last_rating) VALUES
+    ($1,$2,'2000-01-01T00:00:00Z','again'),($1,$3,$4,'hard')
+    ON CONFLICT (student_id,card_id) DO UPDATE SET due_at=EXCLUDED.due_at,last_rating=EXCLUDED.last_rating`,
+  [createdUsers[1], cardIds[0], cardIds[1], dueAt]);
   await login(page, studentEmail);
   await page.goto(`/study/${lessonId}`);
   await expect(page.getByText("1 thẻ đến hạn hoặc chưa học")).toBeVisible();

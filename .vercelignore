@@ -3,6 +3,7 @@
 .env.*
 !.env.template
 *.pem
+backups
 
 # Vercel builds from source; local build caches must never be uploaded.
 node_modules

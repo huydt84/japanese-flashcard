@@ -1,7 +1,7 @@
 import { startFlashcards } from "./helpers/study";
 import { expect, test as base, type Page } from "@playwright/test";
-import { createClient } from "@supabase/supabase-js";
 import ExcelJS from "exceljs";
+import { closeTestDatabase, createTestUser, deleteTestUsers, loginAsUser } from "./helpers/local-auth";
 
 type Actors = {
   teacher: Page;
@@ -9,13 +9,8 @@ type Actors = {
   studentEmail: string;
 };
 
-const password = "Local-test-only-123!";
-const apiUrl = process.env.TEST_SUPABASE_URL ?? "";
-const secretKey = process.env.TEST_SUPABASE_SECRET_KEY ?? "";
-
 const test = base.extend<{ actors: Actors }>({
   actors: async ({ page, browser }, provide, testInfo) => {
-    const admin = createClient(apiUrl, secretKey, { auth: { persistSession: false } });
     const stamp = crypto.randomUUID();
     const teacherEmail = `flow-teacher-${stamp}@example.test`;
     const studentEmail = `flow-student-${stamp}@example.test`;
@@ -27,36 +22,21 @@ const test = base.extend<{ actors: Actors }>({
       hasTouch: mobile,
     });
     try {
-      for (const [email, role, name] of [[teacherEmail, "teacher", "Mai Sensei"], [studentEmail, "student", "Huy Student"]] as const) {
-        const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: name } });
-        if (error) throw error;
-        userIds.push(data.user.id);
-        const { error: profileError } = await admin.from("profiles").update({ role, onboarding_completed_at: new Date().toISOString() }).eq("id", data.user.id);
-        if (profileError) throw profileError;
-      }
+      userIds.push(await createTestUser(teacherEmail, "teacher", "Mai Sensei"));
+      userIds.push(await createTestUser(studentEmail, "student", "Huy Student"));
       const student = await studentContext.newPage();
-      await login(page, teacherEmail);
-      await login(student, studentEmail);
+      await loginAsUser(page, userIds[0]);
+      await loginAsUser(student, userIds[1]);
       await provide({ teacher: page, student, studentEmail });
     } finally {
       await studentContext.close();
-      for (const id of userIds) {
-        const { error } = await admin.auth.admin.deleteUser(id);
-        if (error) throw error;
-      }
+      await deleteTestUsers(userIds);
+      await closeTestDatabase();
     }
   },
 });
 
-test.skip(process.env.RUN_AUTH_E2E !== "1", "Requires the isolated local Supabase stack");
-
-async function login(page: Page, email: string) {
-  await page.goto("/");
-  const status = await page.evaluate(async ({ email, password }) =>
-    (await fetch("/api/test-login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, password }) })).status,
-  { email, password });
-  expect(status).toBe(200);
-}
+test.skip(process.env.RUN_AUTH_E2E !== "1", "Requires the isolated local PostgreSQL stack");
 
 async function createClassAndLesson(teacher: Page, className: string, lessonTitle: string) {
   await teacher.goto("/teacher");
@@ -114,6 +94,109 @@ async function openInvitation(student: Page, className: string) {
   await student.getByRole("link", { name: /Thông báo/ }).click();
   await expect(student.getByRole("heading", { name: className })).toBeVisible();
 }
+
+test("teacher imports CSV files and pasted CSV atomically and keeps existing cards", async ({ actors }) => {
+  const { teacher, student, studentEmail } = actors;
+  const { classPath, lessonPath } = await createClassAndLesson(teacher, "Lớp nhập CSV", "Từ vựng CSV");
+  await addCard(teacher, { kanji: "学ぶ", hiragana: "まなぶ", meaning: "học", exampleJa: "日本語を学びます。", exampleVi: "Tôi học tiếng Nhật." });
+  await teacher.getByText("Nhập từ CSV", { exact: true }).click();
+  const panel = teacher.locator("details").filter({ has: teacher.getByText("Nhập từ CSV", { exact: true }) });
+  const header = "kanji,hiragana,meaning_vi,example_ja,example_vi";
+  const fileRow = '食べる,たべる,"ăn, dùng bữa",朝ご飯を食べます。,Tôi ăn sáng.';
+  const invalid = "書く,,viết,手紙を書きます。,Tôi viết thư.";
+  await panel.getByLabel("Chọn tệp CSV (.csv)").setInputFiles({ name: "cards.csv", mimeType: "text/csv", buffer: Buffer.from(`${header}\n${fileRow}\n${invalid}`) });
+  await panel.getByRole("button", { name: "Kiểm tra và nhập CSV" }).click();
+  await expect(panel.getByRole("alert")).toContainText("Hàng 3: Thiếu hiragana");
+  await expect(teacher.locator("article")).toHaveCount(1);
+
+  await panel.getByLabel("Chọn tệp CSV (.csv)").setInputFiles({ name: "cards.csv", mimeType: "text/csv", buffer: Buffer.from(`\uFEFF${header}\r\n${fileRow}\r\n`) });
+  await panel.getByRole("button", { name: "Kiểm tra và nhập CSV" }).click();
+  await expect(panel.getByRole("status")).toHaveText("Đã nhập 1 thẻ.");
+  await expect(teacher.locator("article")).toHaveCount(2);
+  await expect(panel.getByLabel("Chọn tệp CSV (.csv)")).toHaveValue("");
+
+  await panel.getByRole("radio", { name: "Dán nội dung CSV" }).check();
+  const pastedRow = '読む,よむ,"đọc, đọc sách","「本」を\n読みます。","Tôi đọc ""sách""."';
+  const invalidPaste = `${header}\n${pastedRow}\n${invalid}`;
+  await panel.getByRole("textbox", { name: "Nội dung CSV" }).fill(invalidPaste);
+  await panel.getByRole("button", { name: "Kiểm tra và nhập CSV" }).click();
+  await expect(panel.getByRole("alert")).toContainText("Hàng 4: Thiếu hiragana");
+  await expect(panel.getByRole("radio", { name: "Dán nội dung CSV" })).toBeChecked();
+  await expect(panel.getByRole("textbox", { name: "Nội dung CSV" })).toHaveValue(invalidPaste);
+  await expect(teacher.locator("article")).toHaveCount(2);
+  await panel.getByRole("radio", { name: "Tải tệp CSV", exact: true }).check();
+  await panel.getByRole("radio", { name: "Dán nội dung CSV" }).check();
+  await expect(panel.getByRole("textbox", { name: "Nội dung CSV" })).toHaveValue(invalidPaste);
+
+  await panel.getByRole("textbox", { name: "Nội dung CSV" }).fill(`${header}\n${pastedRow}`);
+  await panel.getByRole("button", { name: "Kiểm tra và nhập CSV" }).click();
+  await expect(panel.getByRole("status")).toHaveText("Đã nhập 1 thẻ.");
+  await expect(panel.getByRole("textbox", { name: "Nội dung CSV" })).toHaveValue("");
+  await teacher.reload();
+  await expect(teacher.locator("article")).toHaveCount(3);
+  await expect(teacher.locator("article").locator("p.font-jp.text-2xl")).toHaveText(["学ぶ", "食べる", "読む"]);
+  await expect(teacher.getByText("ăn, dùng bữa", { exact: true })).toBeVisible();
+  await expect(teacher.getByText('Tôi đọc "sách".', { exact: true })).toBeVisible();
+  await expect(teacher.getByText("Bản nháp", { exact: true })).toBeVisible();
+
+  await teacher.getByRole("button", { name: "Xuất bản", exact: true }).click();
+  await expect(teacher.getByText("Đã xuất bản", { exact: true })).toBeVisible();
+  await sendInvitation(teacher, classPath, studentEmail);
+  await openInvitation(student, "Lớp nhập CSV");
+  await student.getByRole("button", { name: "Tham gia" }).click();
+  await expect(student.getByRole("heading", { name: "Không có thông báo mới" })).toBeVisible();
+  await student.goto(`/study/${lessonPath.split("/").at(-1)}`);
+  await expect(student.getByText("ăn, dùng bữa", { exact: true })).toBeVisible();
+  await expect(student.getByText('Tôi đọc "sách".', { exact: true })).toBeVisible();
+});
+
+test("CSV authoring fits phone and desktop viewports in both themes", async ({ actors }, testInfo) => {
+  test.setTimeout(120_000);
+  const { teacher } = actors;
+  await createClassAndLesson(teacher, "Lớp kiểm tra CSV", "Từ vựng mỗi ngày");
+  await addCard(teacher, { kanji: "学ぶ", hiragana: "まなぶ", meaning: "học, học hỏi", exampleJa: "毎日、日本語を学びます。", exampleVi: "Tôi học tiếng Nhật mỗi ngày." });
+  const viewports = testInfo.project.name === "desktop"
+    ? [{ width: 320, height: 760 }, { width: 1440, height: 900 }, { width: 1920, height: 1080 }, { width: 1440, height: 1000 }]
+    : [{ width: 390, height: 844 }];
+  const sample = 'kanji,hiragana,meaning_vi,example_ja,example_vi\n読む,よむ,"đọc, đọc sách",本を読みます。,Tôi đọc sách.';
+  for (const viewport of viewports) {
+    await teacher.setViewportSize(viewport);
+    for (const colorScheme of ["light", "dark"] as const) {
+      await teacher.emulateMedia({ colorScheme });
+      await teacher.reload();
+      await teacher.getByText("Nhập từ CSV", { exact: true }).click();
+      const panel = teacher.locator("details").filter({ has: teacher.getByText("Nhập từ CSV", { exact: true }) });
+      const name = `${testInfo.project.name}-${viewport.width}x${viewport.height}-${colorScheme}`;
+      const assertFits = async () => {
+        expect(await teacher.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
+        const controls = panel.locator('input:not([type="hidden"]):visible, textarea:visible, button');
+        for (const control of await controls.all()) {
+          const box = await control.boundingBox();
+          expect(box).not.toBeNull();
+          if (!box) throw new Error("CSV control has no visible bounds");
+          expect(box.x).toBeGreaterThanOrEqual(0);
+          expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+        }
+        const button = await panel.getByRole("button", { name: "Kiểm tra và nhập CSV" }).boundingBox();
+        expect(button?.height).toBeGreaterThanOrEqual(44);
+      };
+      await assertFits();
+      await teacher.screenshot({ path: `.impeccable/review/csv/${name}-file.png`, fullPage: true, caret: "initial" });
+      await panel.getByRole("radio", { name: "Dán nội dung CSV" }).check();
+      await panel.getByRole("textbox", { name: "Nội dung CSV" }).fill(sample);
+      await assertFits();
+      await panel.screenshot({ path: `.impeccable/review/csv/${name}-text.png`, caret: "initial" });
+      const invalid = `${sample}\n書く,,viết,手紙を書きます。,Tôi viết thư.`;
+      await panel.getByRole("textbox", { name: "Nội dung CSV" }).fill(invalid);
+      await panel.getByRole("button", { name: "Kiểm tra và nhập CSV" }).click();
+      await expect(panel.getByRole("alert")).toContainText("Hàng 3: Thiếu hiragana");
+      await expect(panel.getByRole("radio", { name: "Dán nội dung CSV" })).toBeChecked();
+      await expect(panel.getByRole("textbox", { name: "Nội dung CSV" })).toHaveValue(invalid);
+      await assertFits();
+      await panel.screenshot({ path: `.impeccable/review/csv/${name}-error.png`, caret: "initial" });
+    }
+  }
+});
 
 for (const source of ["manual", "Excel"] as const) {
   test(`teacher authors ${source} cards, previews, invites; student reviews; teacher sees the result`, async ({ actors }) => {

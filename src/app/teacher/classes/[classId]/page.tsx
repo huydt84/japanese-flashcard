@@ -5,25 +5,14 @@ import { createLesson, inviteStudent, revokeInvitation } from "@/app/actions";
 import { ActionForm } from "@/components/action-form";
 import { EmptyState } from "@/components/empty-state";
 import { requireProfile } from "@/lib/auth";
-
-type StudentProgress = { student_id: string; studied: number; total: number; due: number; good_reviews: number; review_count: number; last_review: string | null };
+import { getTeacherClass } from "@/lib/queries";
 
 export default async function ClassPage({ params }: PageProps<"/teacher/classes/[classId]">) {
   const { classId } = await params;
-  const { supabase } = await requireProfile("teacher");
-  const [{ data: klass }, { data: lessons }, { data: members }, { data: invites }] = await Promise.all([
-    supabase.from("classes").select("id,name,description").eq("id", classId).single(),
-    supabase.from("lessons").select("id,title,status,cards(count)").eq("class_id", classId).order("position"),
-    supabase.from("class_memberships").select("student_id,profiles!class_memberships_student_id_fkey(display_name,email)").eq("class_id", classId),
-    supabase.from("class_invitations").select("id,email,status,created_at").eq("class_id", classId).eq("status", "pending"),
-  ]);
+  const { actorId } = await requireProfile("teacher");
+  const { klass, lessons, members, invites, progress } = await getTeacherClass(actorId, classId);
   if (!klass) notFound();
-
-  const { data: progress, error: progressError } = members?.length
-    ? await supabase.rpc("class_student_progress", { target_class: classId })
-    : { data: [], error: null };
-  if (progressError) throw new Error("Không thể tải tiến độ học viên.");
-  const progressByStudent = new Map((progress as StudentProgress[] ?? []).map((item) => [item.student_id, item]));
+  const progressByStudent = new Map(progress.map((item) => [item.student_id, item]));
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -51,7 +40,7 @@ export default async function ClassPage({ params }: PageProps<"/teacher/classes/
                           <h3 className="break-words text-lg font-bold group-hover:text-brand">{lesson.title}</h3>
                           <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${lesson.status === "published" ? "bg-correct/10 text-correct" : "bg-line/60 text-muted"}`}>{lesson.status === "published" ? "Đã xuất bản" : "Bản nháp"}</span>
                         </div>
-                        <p className="mt-2 text-sm text-muted">{lesson.cards?.[0]?.count ?? 0} thẻ</p>
+                        <p className="mt-2 text-sm text-muted">{lesson.card_count} thẻ</p>
                       </div>
                       <ArrowRightIcon className="shrink-0" aria-hidden="true" />
                     </Link>
@@ -67,12 +56,11 @@ export default async function ClassPage({ params }: PageProps<"/teacher/classes/
               <table className="w-full min-w-[620px] text-left">
                 <thead className="text-xs font-bold text-muted"><tr><th className="py-3 pr-4">Học viên</th><th className="px-3 py-3">Đã học</th><th className="px-3 py-3">Đến hạn</th><th className="px-3 py-3">Tỷ lệ đúng</th><th className="py-3 pl-3">Lần gần nhất</th></tr></thead>
                 <tbody className="divide-y divide-line">
-                  {members?.map((member) => {
+                  {members.map((member) => {
                     const stats = progressByStudent.get(member.student_id);
-                    const studentProfile = member.profiles as unknown as { display_name: string | null; email: string };
-                    return <tr key={member.student_id}><td className="py-4 pr-4"><p className="font-bold">{studentProfile.display_name || "Học viên"}</p><p className="text-sm text-muted">{studentProfile.email}</p></td><td className="px-3 py-4 font-semibold tabular-nums">{stats?.studied ?? 0}/{stats?.total ?? 0}</td><td className="px-3 py-4 font-semibold tabular-nums">{stats?.due ?? 0}</td><td className="px-3 py-4 font-semibold tabular-nums">{stats?.review_count ? `${Math.round((stats.good_reviews / stats.review_count) * 100)}%` : "—"}</td><td className="py-4 pl-3 text-sm text-muted">{stats?.last_review ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium" }).format(new Date(stats.last_review)) : "Chưa học"}</td></tr>;
+                    return <tr key={member.student_id}><td className="py-4 pr-4"><p className="font-bold">{member.display_name || "Học viên"}</p><p className="text-sm text-muted">{member.email}</p></td><td className="px-3 py-4 font-semibold tabular-nums">{stats?.studied ?? 0}/{stats?.total ?? 0}</td><td className="px-3 py-4 font-semibold tabular-nums">{stats?.due ?? 0}</td><td className="px-3 py-4 font-semibold tabular-nums">{stats?.review_count ? `${Math.round((stats.good_reviews / stats.review_count) * 100)}%` : "—"}</td><td className="py-4 pl-3 text-sm text-muted">{stats?.last_review ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium" }).format(new Date(stats.last_review)) : "Chưa học"}</td></tr>;
                   })}
-                  {!members?.length && <tr><td colSpan={5} className="py-8 text-center text-muted">Chưa có học viên tham gia.</td></tr>}
+                  {!members.length && <tr><td colSpan={5} className="py-8 text-center text-muted">Chưa có học viên tham gia.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -93,7 +81,7 @@ export default async function ClassPage({ params }: PageProps<"/teacher/classes/
             <ActionForm action={inviteStudent.bind(null, classId)} className="mt-5 space-y-3" submitClassName="button-primary w-full sm:w-auto" submitLabel="Mời" pendingLabel="Đang gửi" resetOnSuccess>
               <div><label className="sr-only" htmlFor="invite-email">Email học viên</label><input className="field" id="invite-email" name="email" type="email" required maxLength={254} placeholder="hocvien@gmail.com" /></div>
             </ActionForm>
-            {invites?.length ? <div className="mt-5 space-y-3">{invites.map((invite) => <div key={invite.id} className="flex flex-col gap-2 border-t border-line pt-3 sm:flex-row sm:items-center sm:justify-between"><span className="min-w-0 break-all text-sm text-muted">{invite.email}</span><ActionForm action={revokeInvitation.bind(null, invite.id, classId)} submitClassName="button-secondary shrink-0" submitLabel="Thu hồi" pendingLabel="Đang thu hồi" confirmMessage={`Thu hồi lời mời gửi đến ${invite.email}?`} icon={<X aria-hidden="true" />} /></div>)}</div> : null}
+            {invites.length ? <div className="mt-5 space-y-3">{invites.map((invite) => <div key={invite.id} className="flex flex-col gap-2 border-t border-line pt-3 sm:flex-row sm:items-center sm:justify-between"><span className="min-w-0 break-all text-sm text-muted">{invite.email}</span><ActionForm action={revokeInvitation.bind(null, invite.id, classId)} submitClassName="button-secondary shrink-0" submitLabel="Thu hồi" pendingLabel="Đang thu hồi" confirmMessage={`Thu hồi lời mời gửi đến ${invite.email}?`} icon={<X aria-hidden="true" />} /></div>)}</div> : null}
           </div>
         </aside>
       </div>

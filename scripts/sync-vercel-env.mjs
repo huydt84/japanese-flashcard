@@ -1,11 +1,12 @@
 import { spawn } from "node:child_process";
-import { namesMarked, requireEnvironment, validateProductionEnvironment } from "./env-contract.mjs";
+import { loadDeploymentEnvironment, namesMarked, requireEnvironment, validateProductionEnvironment } from "./env-contract.mjs";
 
+await loadDeploymentEnvironment();
 const variableNames = await namesMarked("vercel");
 
 if (!variableNames.length) throw new Error(".env.template does not declare any deployable environment variables.");
 requireEnvironment(variableNames);
-requireEnvironment(["SUPABASE_PROJECT_REF"]);
+requireEnvironment(["NEON_PROJECT_ID"]);
 validateProductionEnvironment();
 
 for (const name of variableNames) {

@@ -5,7 +5,7 @@ Kotoba là web app học từ vựng tiếng Nhật dành cho giáo viên và h�
 ## Công nghệ
 
 - Next.js 16 App Router, React 19, TypeScript và Tailwind CSS 4
-- Supabase Google OAuth, PostgreSQL, Row Level Security và Realtime-ready notifications
+- Auth.js Google OAuth, Neon PostgreSQL, Row Level Security và thông báo trong ứng dụng
 - Lịch ôn cố định và lịch sử câu trả lời được lưu trong PostgreSQL
 - Vitest, Playwright và Vercel
 
@@ -17,58 +17,58 @@ Danh sách mặc định gồm thẻ chưa học và thẻ đã đến hạn. H�
 
 ## Chạy local
 
-`.env` là nguồn cấu hình chuẩn cho development dùng backend thật và cho mỗi lần deploy. Tạo file này từ template một lần, sau đó điền cấu hình production:
+`.env.local` giữ kết nối runtime giới hạn quyền, khóa Auth.js và thông tin Google OAuth. `.env` hiện có giữ kết nối chủ sở hữu Neon chỉ dành cho migrations; các script database đọc giá trị này bên trong và không gửi nó lên Vercel. Không thay `DATABASE_URL` migration bằng kết nối runtime.
 
 ```bash
-pnpm install
-cp .env.template .env
-pnpm dev
+rtk pnpm install --frozen-lockfile
+rtk pnpm run dev
 ```
 
-Next.js tự đọc `.env`. File này bị Git bỏ qua, còn `.env.template` được commit để làm danh sách biến chính thức.
+`DATABASE_URL` runtime được tạo và lưu vào `.env.local` khi migration đầu tiên tạo role `kotoba_runtime`. `.env.template` liệt kê biến production; script deploy đọc giá trị runtime từ `.env.local` để chỉ đồng bộ role giới hạn lên Vercel.
 
-Ngoài ba biến `NEXT_PUBLIC_*`, điền `SUPABASE_PROJECT_REF` và `SUPABASE_ACCESS_TOKEN`. Có thể thêm `SUPABASE_DB_PASSWORD` nếu tài khoản không dùng được kết nối CLI passwordless. Các biến quản trị này chỉ được truyền cho Supabase CLI, không bao giờ được đồng bộ lên Vercel. Kiểm tra cấu hình mà không thay đổi hệ thống bên ngoài bằng:
+Kiểm tra cấu hình và migration production trước khi áp dụng:
 
 ```bash
-pnpm run env:check
-pnpm run db:migrate:dry-run
+rtk pnpm run env:check
+rtk pnpm run db:migrate:dry-run
 ```
 
-Để debug hoàn toàn cô lập với Supabase local, điền ba biến `LOCAL_*` trong cùng file `.env`, khởi động Supabase rồi chạy:
+Để kiểm thử đăng nhập, phân quyền và dữ liệu hoàn toàn cô lập, dùng PostgreSQL local:
 
 ```bash
-pnpm run db:up:local
-pnpm run db:migrate:local
-pnpm run dev:local
+rtk pnpm run db:up:local
+rtk pnpm run db:migrate:local
+rtk pnpm run dev:local
 ```
 
-`dev:local` ánh xạ các biến `LOCAL_*` sang cấu hình runtime và chỉ bật endpoint đăng nhập kiểm thử trong development. Nó không thay đổi `.env` và không thể đưa địa chỉ localhost lên Vercel. Không đặt service-role key vào biến `NEXT_PUBLIC_*`. Mỗi khi sửa `.env`, hãy khởi động lại server.
+Stack kiểm thử dùng container `kotoba-postgres-local`, chỉ mở cổng loopback 55439, volume được giữ lại khi dừng và không kết nối Neon production. Auth.js Credentials provider cùng endpoint test chỉ bật trong development cục bộ khi `ALLOW_TEST_AUTH=1`; production không có đường đăng nhập này.
 
 Các lệnh database tương ứng:
 
 ```bash
-pnpm run db:status:local       # xem trạng thái Supabase local
-pnpm run db:migrate:local      # áp dụng migration còn thiếu ở local
-pnpm run db:reset:local        # chủ động reset local rồi chạy lại migration + seed
-pnpm run db:down:local         # dừng Supabase local, giữ dữ liệu
-pnpm run db:link               # liên kết CLI với project trong .env
-pnpm run db:history            # so sánh migration local và production
-pnpm run db:inspect            # xem thống kê bảng production (read-only)
-pnpm run db:verify             # kiểm tra các mốc schema production (read-only)
-pnpm run db:migrate:dry-run    # xem trước migration production
-pnpm run db:migrate            # áp dụng migration production còn thiếu
+rtk pnpm run db:status:local       # xem trạng thái PostgreSQL local
+rtk pnpm run db:migrate:local      # áp dụng migration còn thiếu ở local
+rtk pnpm run db:reset:local -- --confirm-reset-local-data # chỉ dùng khi chủ động xóa dữ liệu local
+rtk pnpm run db:down:local         # dừng container local, giữ dữ liệu
+rtk pnpm run db:history            # xem migration production
+rtk pnpm run db:inspect            # xem thống kê bảng production (read-only)
+rtk pnpm run db:verify             # kiểm tra schema và quyền runtime (read-only)
+rtk pnpm run db:migrate:dry-run    # xem trước migration production
+rtk pnpm run db:migrate            # áp dụng migration production còn thiếu
 ```
 
-## Thiết lập Supabase
+## Neon và Google OAuth
 
-1. Tạo một Supabase project.
-2. Chạy toàn bộ tệp trong `supabase/migrations` theo thứ tự tên bằng Supabase CLI hoặc SQL Editor.
-3. Trong Authentication, bật Google provider và nhập Google OAuth client ID/secret.
-4. Trong Google Cloud Console, thêm Supabase callback URL được hiển thị trong cấu hình Google provider.
-5. Trong Supabase URL Configuration, thêm `http://localhost:3000/auth/callback`, domain production và các Vercel preview cần kiểm thử.
-6. Sao chép Project URL và publishable key vào `.env`. Không chỉnh tay Vercel Environment Variables; lệnh deploy sẽ đồng bộ chúng từ file này.
+1. Neon project `japanese-flashcard` dùng PostgreSQL ở Singapore. Migration đầu tiên tạo role `kotoba_runtime` không sở hữu bảng và không có `BYPASSRLS`.
+2. Tạo OAuth Client loại Web trong Google Cloud Console. Thêm callback `http://localhost:3000/api/auth/callback/google` và `https://japanese-flashcard-nu.vercel.app/api/auth/callback/google`.
+3. Lưu `AUTH_GOOGLE_ID` và `AUTH_GOOGLE_SECRET` trong `.env.local`. Lệnh `rtk pnpm run db:prepare:runtime` tạo kết nối ứng dụng giới hạn và một `AUTH_SECRET` ổn định trong `.env.local`.
+4. `rtk pnpm run deploy:prod` chuẩn bị role runtime, kiểm tra biến, xem trước/ap dụng migration bằng kết nối owner từ `.env`, đồng bộ kết nối runtime và OAuth từ `.env.local` lên Vercel Production/Preview, rồi deploy.
 
-Migration tạo toàn bộ bảng, database functions, review/undo transaction và RLS. Không dùng service-role key trong frontend.
+Auth.js lưu liên kết Google vào PostgreSQL. UUID profile cũ được giữ nguyên nên lớp, thành viên, thẻ và lịch ôn tiếp tục thuộc cùng tài khoản Google. Người dùng cần đăng nhập Google lại một lần; mật khẩu và phiên Supabase cũ không được chuyển.
+
+## Khôi phục dữ liệu sang Neon
+
+Dữ liệu từ backup Supabase ngày 2026-10-06 đã được nhập và đối chiếu trên Neon ngày 2026-11-02. [Báo cáo di trú](docs/data-migration.md) ghi số lượng, vị trí backup riêng tư và cách xác minh.
 
 ## Nhập thẻ từ Excel
 
@@ -85,6 +85,21 @@ Trang tính đầu tiên phải có đúng năm cột A–E. Hàng 1 là tiêu �
 | E | `example_vi` | Bản dịch câu ví dụ | Tôi học tiếng Nhật mỗi ngày. |
 
 Điền đủ cả năm ô bằng văn bản. Không dùng công thức, số, ngày hay cột bổ sung. Hàng trống được bỏ qua. Mỗi tệp chứa tối đa 500 thẻ và có kích thước tối đa 750 KB. Nếu một hàng có lỗi, hệ thống sẽ báo số hàng và không nhập thẻ nào trong tệp.
+
+## Nhập thẻ từ CSV hoặc dán CSV
+
+Trong trang buổi học, mở **Nhập từ CSV**. Chọn **Tải tệp CSV** để nhập tệp `.csv` lưu bằng UTF-8, hoặc **Dán nội dung CSV** để nhập trực tiếp văn bản. Có thể tải tệp mẫu ngay trong mục này. Bấm **Kiểm tra và nhập CSV** để thêm thẻ vào cuối danh sách hiện có.
+
+Hàng đầu phải có đúng năm tiêu đề như Excel, cùng thứ tự. Dùng dấu phẩy để phân cách cột và điền đủ cả năm trường:
+
+```csv
+kanji,hiragana,meaning_vi,example_ja,example_vi
+学ぶ,まなぶ,"học, học hỏi",毎日、日本語を学びます。,Tôi học tiếng Nhật mỗi ngày.
+```
+
+Đặt trường có dấu phẩy hoặc xuống dòng trong dấu ngoặc kép. Dấu ngoặc kép bên trong trường phải viết thành hai dấu liền nhau, ví dụ `"Tôi đọc ""sách""."`. Hỗ trợ UTF-8 có hoặc không có BOM và xuống dòng Windows hoặc Unix. Không tự đoán mã hóa Shift-JIS hay đổi dấu phân cách thành dấu chấm phẩy.
+
+Mỗi lần nhập tối đa 500 thẻ và 750 KB, áp dụng cho cả tệp lẫn nội dung dán. Hàng trống được bỏ qua. Nếu có lỗi, ứng dụng báo số dòng trong nguồn CSV và không nhập thẻ nào; nội dung đã dán được giữ lại để sửa. Các thẻ mới dùng quyền sở hữu và trạng thái xuất bản của bài học hiện tại.
 
 ## Biểu tượng và ảnh chia sẻ
 
@@ -108,38 +123,38 @@ Lệnh cần Playwright Chromium (`pnpm exec playwright install chromium`) và k
 ## Kiểm tra chất lượng
 
 ```bash
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm test:e2e
-pnpm build
+rtk pnpm run lint
+rtk pnpm run typecheck
+rtk pnpm test
+rtk pnpm run test:e2e
+rtk pnpm run build
 ```
 
 Nếu máy chưa có browser của Playwright: `pnpm exec playwright install chromium webkit`.
 
-Để chạy toàn bộ luồng trình duyệt với giáo viên và học sinh thật trên Supabase local, khởi động stack bằng `pnpm run db:up:local`, rồi chạy `pnpm run test:e2e:local`. Lệnh này tạo tài khoản kiểm thử riêng cho từng kịch bản, khởi động app tại cổng 3110 và xóa tài khoản sau khi hoàn thành. Có thể thêm đường dẫn hoặc bộ lọc Playwright sau `--`, ví dụ `pnpm run test:e2e:local -- tests/e2e/teacher-student-flow.spec.ts`.
+Để chạy toàn bộ luồng trình duyệt trên PostgreSQL local, chạy `rtk pnpm run db:up:local`, `rtk pnpm run db:migrate:local`, rồi `rtk pnpm run test:e2e:local`. Lệnh test quản lý server ở cổng 3110, tạo/xóa người dùng thử và không dùng dữ liệu production. Có thể chỉ định suite, ví dụ `rtk pnpm run test:e2e:local -- tests/e2e/teacher-student-flow.spec.ts`.
 
 ## Deploy Vercel
 
-Sau khi cấu hình Supabase và Google OAuth, chạy một lệnh:
+Sau khi cấu hình Google OAuth và biến runtime, chạy:
 
 ```bash
-pnpm run deploy:prod
+rtk pnpm run deploy:prod
 ```
 
-`deploy:prod` đọc `.env`, kiểm tra toàn bộ contract, áp dụng migration production, đồng bộ duy nhất các dòng public được đánh dấu `@vercel` trong `.env.template` lên Vercel Production và Preview, rồi mới deploy. Lệnh sẽ dừng ngay nếu thiếu credential, project ref không khớp URL, migration lỗi hoặc URL production trỏ vào localhost. Các biến được đánh dấu `@supabase-cli` không bao giờ được gửi lên Vercel. Personal access token nên có hạn dùng và phải được xoay trong `.env` trước khi hết hạn.
+`deploy:prod` kiểm tra domain và OAuth, chạy migration bằng kết nối owner Neon, chỉ đồng bộ những biến được đánh dấu `@vercel` và sau đó deploy. Kết nối owner không được gửi lên Vercel; ứng dụng production dùng `kotoba_runtime` với RLS. Nếu một migration thất bại, lệnh dừng trước khi deploy.
 
-`vercel.json` đặt Functions tại Tokyo (`hnd1`), cùng vùng với Supabase production (`ap-northeast-1`). Giữ máy chủ ứng dụng gần database để các thao tác học, mời và chuyển vai trò không phải thực hiện nhiều lượt gọi xuyên Thái Bình Dương. Nếu chuyển vùng database, cập nhật cấu hình này và deploy lại.
+`vercel.json` đặt Functions tại Singapore (`sin1`), cùng vùng AWS với Neon. [Vercel xác nhận `sin1` là Singapore (`ap-southeast-1`)](https://vercel.com/docs/regions).
 
-`.vercelignore` loại bỏ `.env`, cache build local (`.next`, `.next-*`), báo cáo kiểm thử và trạng thái Supabase CLI khỏi gói upload. Vercel CLI không dùng `.gitignore` để loại bỏ các tệp này. Không bỏ qua `pnpm-lock.yaml`: Vercel cần lockfile để nhận diện package manager và cài đúng dependency. Giữ pnpm 11.25.0 khi dùng Vercel CLI 58.4.4; lockfile nhiều YAML document của pnpm 12 khiến CLI này báo lỗi parse và nhận diện sai package manager.
+`.vercelignore` loại bỏ `.env*`, backup, cache build local, báo cáo kiểm thử và trạng thái Supabase CLI khỏi gói upload. Vercel CLI không dùng `.gitignore` để loại bỏ các tệp này. Giữ `pnpm-lock.yaml` và pnpm 11.25.0 để Vercel dùng đúng package manager đã khóa.
 
 Để xem trước các tệp sẽ upload mà không deploy hoặc thay đổi database/environment:
 
 ```bash
-pnpm exec vercel deploy --dry --json
+rtk pnpm exec vercel deploy --dry --json
 ```
 
-Sau lần deploy đầu, cập nhật Site URL/Redirect URLs trong Supabase và Authorized origins/redirects trong Google Cloud bằng domain production, rồi đăng nhập thử trên domain thật.
+Sau deploy, đăng nhập thử bằng Google trên domain production và xác nhận quyền lớp học, nhập thẻ, lịch ôn và undo.
 
 ## Cấu trúc chính
 
@@ -147,5 +162,5 @@ Sau lần deploy đầu, cập nhật Site URL/Redirect URLs trong Supabase và 
 - `src/app/student`: lớp, notification và bài học đã xuất bản
 - `src/app/study`: danh sách từ vựng, phiên thẻ ghi nhớ và trắc nghiệm
 - `src/app/actions.ts`: mutations đã xác thực
-- `supabase/migrations`: schema, transaction functions và RLS
+- `database/migrations`: schema PostgreSQL, Auth.js profile sync, domain commands và RLS
 - `PRODUCT.md`: product truth đã xác nhận

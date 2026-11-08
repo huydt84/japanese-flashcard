@@ -1,16 +1,22 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/auth";
+import { withActor } from "@/lib/db";
 import { resolveWorkspaceRole } from "@/lib/roles";
 import type { Profile, UserRole, WorkspaceRole } from "@/lib/types";
 
 export const getViewer = cache(async () => {
-  const supabase = await createClient();
-  // Cached signing keys avoid a user lookup; roles still come from the current database row.
-  const { data, error } = await supabase.auth.getClaims();
-  if (error || !data?.claims.sub) return null;
-  const { data: profile } = await supabase.from("profiles").select("id,email,display_name,avatar_url,role,active_mode").eq("id", data.claims.sub).single();
-  return { profile: profile as Profile | null, supabase };
+  const session = await auth();
+  const actorId = session?.user?.id;
+  if (!actorId) return null;
+  const profile = await withActor(actorId, async (client) => {
+    const result = await client.query<Profile>(
+      "SELECT id, email, display_name, avatar_url, role, active_mode FROM public.profiles WHERE id = $1",
+      [actorId],
+    );
+    return result.rows[0] ?? null;
+  });
+  return { actorId, profile };
 });
 
 export async function requireProfile(role?: WorkspaceRole) {

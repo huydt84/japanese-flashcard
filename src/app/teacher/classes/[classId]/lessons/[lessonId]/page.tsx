@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowUp, CheckCircle, Eye, FileXls, PencilSimple, Plus, Trash } from "@phosphor-icons/react/dist/ssr";
+import { ArrowDown, ArrowLeft, ArrowUp, CheckCircle, Eye, FileCsv, FileXls, PencilSimple, Plus, Trash } from "@phosphor-icons/react/dist/ssr";
 import { addCard, deleteCard, importCards, moveCard, publishLesson, updateCard, updateLessonTitle } from "@/app/actions";
 import { ActionForm } from "@/components/action-form";
 import { XlsxImporter } from "@/components/xlsx-importer";
+import { CsvImporter } from "@/components/csv-importer";
 import { LessonTitleEditor } from "@/components/lesson-title-editor";
 import { requireProfile } from "@/lib/auth";
+import { getTeacherLesson } from "@/lib/queries";
 
 const fields = [
   ["kanji", "Kanji", "学ぶ"],
@@ -17,11 +19,8 @@ const fields = [
 
 export default async function LessonEditor({ params }: PageProps<"/teacher/classes/[classId]/lessons/[lessonId]">) {
   const { classId, lessonId } = await params;
-  const { supabase } = await requireProfile("teacher");
-  const [{ data: lesson }, { data: cards }] = await Promise.all([
-    supabase.from("lessons").select("id,title,description,status").eq("id", lessonId).eq("class_id", classId).single(),
-    supabase.from("cards").select("*").eq("lesson_id", lessonId).order("position").order("created_at"),
-  ]);
+  const { actorId } = await requireProfile("teacher");
+  const { lesson, cards } = await getTeacherLesson(actorId, lessonId, classId);
   if (!lesson) notFound();
 
   return (
@@ -33,7 +32,7 @@ export default async function LessonEditor({ params }: PageProps<"/teacher/class
             <LessonTitleEditor title={lesson.title} action={updateLessonTitle.bind(null, lessonId, classId)} />
             <span className={`rounded-full px-3 py-1 text-xs font-bold ${lesson.status === "published" ? "bg-correct/10 text-correct" : "bg-line/60 text-muted"}`}>{lesson.status === "published" ? "Đã xuất bản" : "Bản nháp"}</span>
           </div>
-          <p className="mt-3 max-w-3xl break-words text-lg text-muted">{lesson.description || "Thêm từng thẻ hoặc nhập danh sách từ tệp Excel."}</p>
+          <p className="mt-3 max-w-3xl break-words text-lg text-muted">{lesson.description || "Thêm từng thẻ, nhập tệp Excel/CSV hoặc dán nội dung CSV."}</p>
         </div>
         <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-start">
           {cards?.length ? (
@@ -77,7 +76,7 @@ export default async function LessonEditor({ params }: PageProps<"/teacher/class
           </div>
         </section>
 
-        <aside className="space-y-6">
+        <aside className="min-w-0 space-y-6">
           <div className="rounded-2xl bg-surface-strong p-6 paper-shadow">
             <div className="flex items-center gap-3"><Plus size={22} className="text-brand" aria-hidden="true" /><h2 className="text-xl font-bold">Thêm một thẻ</h2></div>
             <ActionForm action={addCard.bind(null, lessonId, classId)} className="mt-5 space-y-4" submitClassName="button-primary w-full" submitLabel="Thêm thẻ" pendingLabel="Đang thêm" resetOnSuccess>
@@ -87,6 +86,10 @@ export default async function LessonEditor({ params }: PageProps<"/teacher/class
           <details className="rounded-2xl bg-surface p-6">
             <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 font-bold"><FileXls size={22} aria-hidden="true" />Nhập từ Excel</summary>
             <div className="mt-5"><XlsxImporter action={importCards.bind(null, lessonId, classId)} /></div>
+          </details>
+          <details className="min-w-0 rounded-2xl bg-surface p-6">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 font-bold"><FileCsv size={22} aria-hidden="true" />Nhập từ CSV</summary>
+            <div className="mt-5"><CsvImporter action={importCards.bind(null, lessonId, classId)} /></div>
           </details>
         </aside>
       </div>

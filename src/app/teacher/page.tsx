@@ -4,14 +4,11 @@ import { createClass } from "@/app/actions";
 import { ActionForm } from "@/components/action-form";
 import { EmptyState } from "@/components/empty-state";
 import { requireProfile } from "@/lib/auth";
+import { getTeacherClasses } from "@/lib/queries";
 
 export default async function TeacherHome() {
-  const { profile, supabase } = await requireProfile("teacher");
-  const { data: classes } = await supabase
-    .from("classes")
-    .select("id,name,description,created_at,class_memberships(count),lessons(count)")
-    .is("archived_at", null)
-    .order("created_at", { ascending: false });
+  const { actorId, profile } = await requireProfile("teacher");
+  const classes = await getTeacherClasses(actorId);
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -35,7 +32,7 @@ export default async function TeacherHome() {
                     <div className="min-w-0">
                       <h3 className="break-words text-lg font-bold group-hover:text-brand">{klass.name}</h3>
                       <p className="mt-1 line-clamp-2 break-words text-sm text-muted">{klass.description || "Chưa có mô tả"}</p>
-                      <p className="mt-2 text-xs font-semibold tabular-nums text-muted">{klass.lessons?.[0]?.count ?? 0} bài · {klass.class_memberships?.[0]?.count ?? 0} học viên</p>
+                      <p className="mt-2 text-xs font-semibold tabular-nums text-muted">{klass.lesson_count} bài · {klass.member_count} học viên</p>
                     </div>
                     <ArrowRightIcon size={22} className="shrink-0" aria-hidden="true" />
                   </Link>

@@ -1,12 +1,12 @@
 import ExcelJS from "exceljs";
-import { CARD_XLSX_HEADERS } from "@/lib/xlsx";
+import { CARD_IMPORT_HEADERS } from "@/lib/card-import";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Thẻ học");
-  sheet.addRow([...CARD_XLSX_HEADERS]);
+  sheet.addRow([...CARD_IMPORT_HEADERS]);
   sheet.addRow(["学ぶ", "まなぶ", "học, học hỏi", "毎日、日本語を学びます。", "Tôi học tiếng Nhật mỗi ngày."]);
   sheet.columns = [{ width: 18 }, { width: 18 }, { width: 26 }, { width: 36 }, { width: 38 }];
   sheet.getRow(1).font = { bold: true };
